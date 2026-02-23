@@ -1,0 +1,20 @@
+# Ignore .code-workspace files
+*.code-workspace
+
+# Ignore .vscode folders
+.vscode/
+
+# Ignore .idea folders
+.idea/
+
+# Ignore .pytest_cache folders
+.pytest_cache/
+
+# Ignore .pytest_cache folders
+__pycache__/
+
+# Ignore .env files
+.env
+
+# Ignore notes folder
+notes/
