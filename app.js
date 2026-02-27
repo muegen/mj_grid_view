@@ -21,9 +21,14 @@ const pairIndicatorEl = document.getElementById("pairIndicator");
 const shareStatusEl = document.getElementById("shareStatus");
 const toTopBtn = document.getElementById("toTopBtn");
 const inputCardC = document.getElementById("inputCardC");
+const favoritesBody = document.getElementById("favoritesBody");
+const favoritesEmptyEl = document.getElementById("favoritesEmpty");
+const favoritesCopyBtn = document.getElementById("favoritesCopyBtn");
+const favoritesStatusEl = document.getElementById("favoritesStatus");
 
 const IMAGE_COUNT = 4;
 const pairRegistry = new Map();
+const favoritesMap = new Map();
 const zoomPaneMap = { A: null, B: null, C: null };
 const SIDE_CONFIG = {
   A: { labelInput: labelAInput, jobsInput: jobsAInput },
@@ -37,6 +42,7 @@ let currentPairIndex = -1;
 let shareStatusTimer = null;
 let saveTimer = null;
 let renderTimer = null;
+let favoritesStatusTimer = null;
 
 const PLACEHOLDER_MESSAGES = {
   missing: "Missing job",
@@ -114,6 +120,178 @@ function createElement(tag, className, text) {
 
 function createPlaceholder(message) {
   return createElement("div", "placeholder", message);
+}
+
+function getFavoriteKey(pairId, side) {
+  if (!pairId || !side) return null;
+  return `${pairId}::${side}`;
+}
+
+function buildLabelJobTotals() {
+  const totals = new Map();
+  Object.keys(SIDE_CONFIG).forEach((side) => {
+    const label = getLabelForSide(side);
+    const jobIds = getJobIdsForSide(side);
+    if (!totals.has(label)) {
+      totals.set(label, new Set());
+    }
+    const group = totals.get(label);
+    jobIds.forEach((jobId) => group.add(jobId));
+  });
+  return totals;
+}
+
+function buildFavoriteGroups() {
+  const totals = buildLabelJobTotals();
+  const groups = new Map();
+  favoritesMap.forEach((entry) => {
+    const label = getLabelForSide(entry.side);
+    if (!groups.has(label)) {
+      groups.set(label, { label, count: 0, jobIds: new Set() });
+    }
+    const group = groups.get(label);
+    group.count += 1;
+    if (entry.jobId) group.jobIds.add(entry.jobId);
+  });
+  return Array.from(groups.values()).map((group) => ({
+    label: group.label,
+    count: group.count,
+    totalCount: totals.get(group.label)?.size ?? 0,
+    jobIds: Array.from(group.jobIds),
+  }));
+}
+
+function updateFavoritesSummary() {
+  if (!favoritesBody || !favoritesEmptyEl || !favoritesCopyBtn) return;
+  favoritesBody.innerHTML = "";
+
+  const groups = buildFavoriteGroups().sort((a, b) =>
+    a.label.localeCompare(b.label)
+  );
+  const hasFavorites = groups.length > 0;
+
+  favoritesEmptyEl.hidden = hasFavorites;
+  favoritesCopyBtn.disabled = !hasFavorites;
+
+  if (!hasFavorites) return;
+
+  groups.forEach((group) => {
+    const row = document.createElement("tr");
+    row.appendChild(createElement("td", null, group.label));
+    // row.appendChild(createElement("td", null, `${group.totalCount}`)); // Don't need group count
+    row.appendChild(createElement("td", null, `${group.count}`));
+    favoritesBody.appendChild(row);
+  });
+}
+
+function showFavoritesStatus(message, isError = false) {
+  if (!favoritesStatusEl) return;
+  if (favoritesStatusTimer) window.clearTimeout(favoritesStatusTimer);
+  favoritesStatusEl.textContent = message;
+  favoritesStatusEl.classList.toggle("is-error", Boolean(isError));
+  favoritesStatusTimer = window.setTimeout(() => {
+    favoritesStatusEl.textContent = "";
+    favoritesStatusEl.classList.remove("is-error");
+  }, 2000);
+}
+
+function buildFavoritesCopyText() {
+  const groups = buildFavoriteGroups().sort((a, b) =>
+    a.label.localeCompare(b.label)
+  );
+  if (!groups.length) return "";
+  const header = groups.map((group) => group.label).join("\t");
+  const maxRows = Math.max(
+    ...groups.map((group) => group.jobIds.length),
+    0
+  );
+  const lines = [header];
+  for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+    const row = groups.map((group) => group.jobIds[rowIndex] ?? "");
+    lines.push(row.join("\t"));
+  }
+  return lines.join("\n");
+}
+
+async function copyFavoritesSummary() {
+  const text = buildFavoritesCopyText();
+  if (!text) {
+    showFavoritesStatus("No favorites to copy.", true);
+    return;
+  }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      showFavoritesStatus("Favorites copied.");
+      return;
+    }
+    if (fallbackCopyText(text)) {
+      showFavoritesStatus("Favorites copied.");
+      return;
+    }
+    throw new Error("Clipboard unavailable");
+  } catch (error) {
+    showFavoritesStatus("Copy failed. Favorites in console.", true);
+    console.info("Favorites:\n", text);
+  }
+}
+
+function toggleFavoriteForHover() {
+  const hovered = lastHover?.img;
+  if (!hovered) return;
+
+  const pairId = hovered.dataset.pairId;
+  const side = hovered.dataset.side;
+  const key = getFavoriteKey(pairId, side);
+  if (!key) return;
+
+  const pair = pairRegistry.get(pairId);
+  const data = pair ? pair[side] : null;
+  if (!data || data.status !== "ok" || !data.jobId) return;
+
+  const card = hovered.closest(".side-card");
+  if (!card) return;
+
+  if (favoritesMap.has(key)) {
+    favoritesMap.delete(key);
+    card.classList.remove("is-favorite");
+  } else {
+    favoritesMap.set(key, { pairId, side, jobId: data.jobId, card });
+    card.classList.add("is-favorite");
+  }
+
+  updateFavoritesSummary();
+}
+
+function reconcileFavorites() {
+  if (!favoritesMap.size) {
+    updateFavoritesSummary();
+    return;
+  }
+  const nextMap = new Map();
+
+  favoritesMap.forEach((entry, key) => {
+    const pair = pairRegistry.get(entry.pairId);
+    if (!pair) return;
+    const data = pair[entry.side];
+    if (!data || data.status !== "ok" || data.jobId !== entry.jobId) return;
+    const card = data.img ? data.img.closest(".side-card") : null;
+    if (!card) return;
+    card.classList.add("is-favorite");
+    nextMap.set(key, { ...entry, card });
+  });
+
+  favoritesMap.clear();
+  nextMap.forEach((value, key) => favoritesMap.set(key, value));
+  updateFavoritesSummary();
+}
+
+function clearFavorites() {
+  favoritesMap.forEach((entry) => {
+    if (entry.card) entry.card.classList.remove("is-favorite");
+  });
+  favoritesMap.clear();
+  updateFavoritesSummary();
 }
 
 function registerPairImage(pairId, side, data) {
@@ -573,6 +751,10 @@ function handlePairNavigationKey(event) {
     event.preventDefault();
     toggleZoomRequiresShift();
   }
+  if (event.key === "f" || event.key === "F") {
+    event.preventDefault();
+    toggleFavoriteForHover();
+  }
 }
 
 function getZoomLevel() {
@@ -772,6 +954,11 @@ function handleZoomMove(event) {
   showZoomForImage(img, event.clientX, event.clientY, event.shiftKey);
 }
 
+function handleZoomLeave() {
+  lastHover = null;
+  hideZoomPreview();
+}
+
 function handleZoomKeyChange(event) {
   if (!lastHover) return;
   showZoomForImage(
@@ -792,6 +979,7 @@ function renderComparisons() {
   hideZoomPreview();
 
   if (pairCount === 0) {
+    clearFavorites();
     updateStatus();
     refreshPairCards();
     return;
@@ -825,6 +1013,7 @@ function renderComparisons() {
 
   updateStatus();
   refreshPairCards();
+  reconcileFavorites();
 }
 
 function renderGridPair(sideData, pairIndex, pairId) {
@@ -916,6 +1105,7 @@ function clearInputs() {
   comparisonsEl.innerHTML = "";
   pairRegistry.clear();
   hideZoomPreview();
+  clearFavorites();
   updateStatus();
   refreshPairCards();
   saveState();
@@ -944,6 +1134,9 @@ function init() {
   });
   clearBtn.addEventListener("click", clearInputs);
   if (shareBtn) shareBtn.addEventListener("click", copyShareLink);
+  if (favoritesCopyBtn) {
+    favoritesCopyBtn.addEventListener("click", copyFavoritesSummary);
+  }
   if (toTopBtn) {
     toTopBtn.addEventListener("click", () => {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -985,7 +1178,7 @@ function init() {
   });
 
   comparisonsEl.addEventListener("mousemove", handleZoomMove);
-  comparisonsEl.addEventListener("mouseleave", hideZoomPreview);
+  comparisonsEl.addEventListener("mouseleave", handleZoomLeave);
   document.addEventListener("keydown", handleZoomKeyChange);
   document.addEventListener("keyup", handleZoomKeyChange);
   document.addEventListener("keydown", handlePairNavigationKey);
@@ -1018,6 +1211,7 @@ function init() {
   } else {
     refreshPairCards();
   }
+  updateFavoritesSummary();
   if (urlState) saveState();
 }
 

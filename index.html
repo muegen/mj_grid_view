@@ -90,6 +90,7 @@
                 <span class="shortcut-item">G: view mode</span>
                 <span class="shortcut-item">Z: zoom level</span>
                 <span class="shortcut-item">S: zoom panel size</span>
+                <span class="shortcut-item">F: favorite</span>
                 <span class="shortcut-item">P: preview</span>
                 <span class="shortcut-item">H: hold shift</span>
               </div>
@@ -106,6 +107,44 @@
               </button>
             </div>
             <div id="shareStatus" class="share-status"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="favorites">
+        <div class="favorites-card">
+          <div class="favorites-header">
+            <h2>Favorites</h2>
+            <button
+              id="favoritesCopyBtn"
+              class="icon-button"
+              type="button"
+              aria-label="Copy favorites"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H10V7h9v14Z"
+                />
+              </svg>
+            </button>
+          </div>
+          <div class="favorites-hint">
+            Hover an image and press F to toggle a favorite.
+          </div>
+          <div id="favoritesStatus" class="favorites-status"></div>
+          <div class="favorites-table-wrapper">
+            <table class="favorites-table" aria-label="Favorite selections">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Favorites</th>
+                </tr>
+              </thead>
+              <tbody id="favoritesBody"></tbody>
+            </table>
+            <div id="favoritesEmpty" class="favorites-empty">
+              No favorites yet.
+            </div>
           </div>
         </div>
       </section>

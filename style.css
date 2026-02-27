@@ -8,6 +8,8 @@
   --accent: #3d6aff;
   --accent-strong: #2a51d8;
   --success: #1e7f52;
+  --favorite-bg: #e9f6ef;
+  --favorite-border: #6cc19a;
   --shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
@@ -297,6 +299,108 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.favorites {
+  margin-top: 24px;
+}
+
+.favorites-card {
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.favorites-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.favorites-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.favorites-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.favorites-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--success);
+  min-height: 16px;
+}
+
+.favorites-status.is-error {
+  color: var(--muted);
+}
+
+.favorites-table-wrapper {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.favorites-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.favorites-table th,
+.favorites-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.favorites-table th {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.favorites-table td.favorites-ids {
+  word-break: break-all;
+}
+
+.favorites-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 10px 0;
+}
+
+.icon-button {
+  border: 1px solid var(--border);
+  background: #f4f6fb;
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--muted);
+}
+
+.icon-button:hover {
+  background: #e1e6ef;
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .is-hidden {
   display: none;
 }
@@ -359,6 +463,16 @@ button:focus-visible {
   border-radius: 14px;
   padding: 12px;
   background: #fafbff;
+}
+
+.side-card.is-favorite {
+  border-color: var(--favorite-border);
+  background: var(--favorite-bg);
+  box-shadow: 0 0 0 2px rgba(108, 193, 154, 0.15);
+}
+
+.side-card.is-favorite .image-frame {
+  background: #dff1e7;
 }
 
 .side-label {
