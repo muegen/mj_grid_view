@@ -30,6 +30,13 @@
                 </select>
               </label>
               <label class="control">
+                Columns
+                <select id="columnCount">
+                  <option value="2" selected>2 columns</option>
+                  <option value="3">3 columns</option>
+                </select>
+              </label>
+              <label class="control">
                 Zoom level (z)
                 <select id="zoomLevel">
                   <option value="1.5">1.5x</option>
@@ -61,9 +68,9 @@
             </div>
             <div class="meta-row">
               <div class="hint">
-                Jobs are paired by order (A1 <-> B1, A2 <-> B2). Extra jobs show
-                as missing. Hover an image to use the zoom preview (hold Shift if
-                enabled).
+                Jobs are paired by order (A1 <-> B1 <-> C1 if enabled). Extra
+                jobs show as missing. Hover an image to use the zoom preview
+                (hold Shift if enabled).
               </div>
               <div id="status" class="status"></div>
             </div>
@@ -139,6 +146,26 @@
             Job IDs or URLs
             <textarea
               id="jobsB"
+              rows="6"
+              placeholder="One per line or comma-separated"
+            ></textarea>
+          </label>
+        </div>
+        <div class="input-card is-hidden" id="inputCardC" hidden>
+          <h2>C (Optional)</h2>
+          <label class="control">
+            Label
+            <input
+              id="labelC"
+              type="text"
+              placeholder="Example: Alternative"
+              autocomplete="off"
+            />
+          </label>
+          <label class="control">
+            Job IDs or URLs
+            <textarea
+              id="jobsC"
               rows="6"
               placeholder="One per line or comma-separated"
             ></textarea>

@@ -1,10 +1,13 @@
 const viewModeSelect = document.getElementById("viewMode");
+const columnCountSelect = document.getElementById("columnCount");
 const renderBtn = document.getElementById("renderBtn");
 const clearBtn = document.getElementById("clearBtn");
 const labelAInput = document.getElementById("labelA");
 const labelBInput = document.getElementById("labelB");
+const labelCInput = document.getElementById("labelC");
 const jobsAInput = document.getElementById("jobsA");
 const jobsBInput = document.getElementById("jobsB");
+const jobsCInput = document.getElementById("jobsC");
 const statusEl = document.getElementById("status");
 const comparisonsEl = document.getElementById("comparisons");
 const zoomLevelSelect = document.getElementById("zoomLevel");
@@ -17,10 +20,16 @@ const nextPairBtn = document.getElementById("nextPairBtn");
 const pairIndicatorEl = document.getElementById("pairIndicator");
 const shareStatusEl = document.getElementById("shareStatus");
 const toTopBtn = document.getElementById("toTopBtn");
+const inputCardC = document.getElementById("inputCardC");
 
 const IMAGE_COUNT = 4;
 const pairRegistry = new Map();
-const zoomPaneMap = { A: null, B: null };
+const zoomPaneMap = { A: null, B: null, C: null };
+const SIDE_CONFIG = {
+  A: { labelInput: labelAInput, jobsInput: jobsAInput },
+  B: { labelInput: labelBInput, jobsInput: jobsBInput },
+  C: { labelInput: labelCInput, jobsInput: jobsCInput },
+};
 let zoomPreview = null;
 let lastHover = null;
 let pairCards = [];
@@ -61,10 +70,39 @@ function parseJobIds(raw) {
     .filter(Boolean);
 }
 
-function getEffectiveMode(aIds, bIds) {
+function getSelectedColumnCount() {
+  if (!columnCountSelect) return 2;
+  const value = Number.parseInt(columnCountSelect.value, 10);
+  return value === 3 ? 3 : 2;
+}
+
+function getActiveSides() {
+  return getSelectedColumnCount() === 3 ? ["A", "B", "C"] : ["A", "B"];
+}
+
+function getLabelForSide(side) {
+  const input = SIDE_CONFIG[side]?.labelInput;
+  if (!input) return side;
+  return input.value.trim() || side;
+}
+
+function getJobIdsForSide(side) {
+  const input = SIDE_CONFIG[side]?.jobsInput;
+  return parseJobIds(input ? input.value : "");
+}
+
+function getActiveSideData() {
+  return getActiveSides().map((side) => ({
+    side,
+    label: getLabelForSide(side),
+    jobIds: getJobIdsForSide(side),
+  }));
+}
+
+function getEffectiveMode(jobIdsBySide) {
   const selected = viewModeSelect.value;
   if (selected !== "auto") return selected;
-  return aIds.length <= 1 || bIds.length <= 1 ? "individual" : "grid";
+  return jobIdsBySide.some((ids) => ids.length <= 1) ? "individual" : "grid";
 }
 
 function createElement(tag, className, text) {
@@ -81,7 +119,7 @@ function createPlaceholder(message) {
 function registerPairImage(pairId, side, data) {
   if (!pairId || !side) return;
   if (!pairRegistry.has(pairId)) {
-    pairRegistry.set(pairId, { A: null, B: null });
+    pairRegistry.set(pairId, {});
   }
   const entry = pairRegistry.get(pairId);
   entry[side] = data;
@@ -89,7 +127,7 @@ function registerPairImage(pairId, side, data) {
 
 function createZoomPreview() {
   const preview = createElement("div", "zoom-preview");
-  ["A", "B"].forEach((side) => {
+  ["A", "B", "C"].forEach((side) => {
     const pane = createElement("div", "zoom-pane");
     const label = createElement("div", "zoom-pane-label", side);
     const image = createElement(
@@ -100,9 +138,27 @@ function createZoomPreview() {
     pane.appendChild(label);
     pane.appendChild(image);
     preview.appendChild(pane);
-    zoomPaneMap[side] = { label, image };
+    zoomPaneMap[side] = { container: pane, label, image };
   });
   return preview;
+}
+
+function updateZoomPreviewVisibility() {
+  const activeSides = new Set(getActiveSides());
+  Object.entries(zoomPaneMap).forEach(([side, pane]) => {
+    if (!pane || !pane.container) return;
+    pane.container.classList.toggle("is-hidden", !activeSides.has(side));
+  });
+}
+
+function updateColumnVisibility() {
+  const showThird = getSelectedColumnCount() === 3;
+  if (inputCardC) {
+    inputCardC.classList.toggle("is-hidden", !showThird);
+    inputCardC.hidden = !showThird;
+    inputCardC.setAttribute("aria-hidden", (!showThird).toString());
+  }
+  updateZoomPreviewVisibility();
 }
 
 function createImageFrame({ url, altText, pairId, side, jobId }) {
@@ -167,10 +223,13 @@ function createImageFrame({ url, altText, pairId, side, jobId }) {
 
 function getState() {
   return {
+    columnCount: columnCountSelect ? columnCountSelect.value : "2",
     labelA: labelAInput.value,
     labelB: labelBInput.value,
+    labelC: labelCInput ? labelCInput.value : "",
     jobsA: jobsAInput.value,
     jobsB: jobsBInput.value,
+    jobsC: jobsCInput ? jobsCInput.value : "",
     viewMode: viewModeSelect.value,
     zoomLevel: zoomLevelSelect.value,
     zoomSize: zoomSizeSelect.value,
@@ -181,10 +240,15 @@ function getState() {
 
 function applyState(state) {
   if (!state) return;
+  if (state.columnCount && columnCountSelect) {
+    columnCountSelect.value = state.columnCount;
+  }
   if (state.labelA !== undefined) labelAInput.value = state.labelA;
   if (state.labelB !== undefined) labelBInput.value = state.labelB;
+  if (state.labelC !== undefined && labelCInput) labelCInput.value = state.labelC;
   if (state.jobsA !== undefined) jobsAInput.value = state.jobsA;
   if (state.jobsB !== undefined) jobsBInput.value = state.jobsB;
+  if (state.jobsC !== undefined && jobsCInput) jobsCInput.value = state.jobsC;
   if (state.viewMode) viewModeSelect.value = state.viewMode;
   if (state.zoomLevel) zoomLevelSelect.value = state.zoomLevel;
   if (state.zoomSize) zoomSizeSelect.value = state.zoomSize;
@@ -227,15 +291,18 @@ function loadStateFromStorage() {
 
 function parseStateFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  const keys = ["a", "b", "la", "lb", "vm", "zl", "zs", "ze", "zk"];
+  const keys = ["a", "b", "c", "la", "lb", "lc", "cols", "vm", "zl", "zs", "ze", "zk"];
   const hasAny = keys.some((key) => params.has(key));
   if (!hasAny) return null;
 
   return {
     jobsA: params.get("a") ?? "",
     jobsB: params.get("b") ?? "",
+    jobsC: params.get("c") ?? "",
     labelA: params.get("la") ?? "",
     labelB: params.get("lb") ?? "",
+    labelC: params.get("lc") ?? "",
+    columnCount: params.get("cols") || (columnCountSelect ? columnCountSelect.value : "2"),
     viewMode: params.get("vm") || viewModeSelect.value,
     zoomLevel: params.get("zl") || zoomLevelSelect.value,
     zoomSize: params.get("zs") || zoomSizeSelect.value,
@@ -264,8 +331,15 @@ function buildShareUrl() {
 
   if (state.jobsA) params.set("a", state.jobsA.trim());
   if (state.jobsB) params.set("b", state.jobsB.trim());
+  if (state.columnCount === "3" && state.jobsC) {
+    params.set("c", state.jobsC.trim());
+  }
   if (state.labelA) params.set("la", state.labelA.trim());
   if (state.labelB) params.set("lb", state.labelB.trim());
+  if (state.columnCount === "3" && state.labelC) {
+    params.set("lc", state.labelC.trim());
+  }
+  params.set("cols", state.columnCount || "2");
   params.set("vm", state.viewMode);
   params.set("zl", state.zoomLevel);
   params.set("zs", state.zoomSize);
@@ -324,10 +398,10 @@ async function copyShareLink() {
 }
 
 function updateStatus() {
-  const aIds = parseJobIds(jobsAInput.value);
-  const bIds = parseJobIds(jobsBInput.value);
-  const mode = getEffectiveMode(aIds, bIds);
-  const pairCount = Math.max(aIds.length, bIds.length);
+  const sideData = getActiveSideData();
+  const jobCounts = sideData.map((entry) => entry.jobIds.length);
+  const mode = getEffectiveMode(sideData.map((entry) => entry.jobIds));
+  const pairCount = Math.max(0, ...jobCounts);
 
   if (pairCount === 0) {
     statusEl.textContent = PLACEHOLDER_MESSAGES.empty;
@@ -335,12 +409,14 @@ function updateStatus() {
   }
 
   const modeLabel = mode === "grid" ? "Grid" : "Individual";
-  const mismatch =
-    aIds.length !== bIds.length
-      ? "Counts differ; unmatched jobs will show as missing."
-      : "";
+  const mismatch = jobCounts.some((count) => count !== jobCounts[0])
+    ? "Counts differ; unmatched jobs will show as missing."
+    : "";
+  const countLabel = sideData
+    .map((entry) => `${entry.side}: ${entry.jobIds.length} job(s)`)
+    .join(" | ");
 
-  statusEl.textContent = `A: ${aIds.length} job(s) | B: ${bIds.length} job(s) | Mode: ${modeLabel}. ${mismatch}`.trim();
+  statusEl.textContent = `${countLabel} | Mode: ${modeLabel}. ${mismatch}`.trim();
 }
 
 function isEditableTarget(target) {
@@ -561,8 +637,9 @@ function updateZoomOutline(data, xRatio, yRatio, zoomLevel) {
 function hideAllOutlines() {
   pairRegistry.forEach((pair) => {
     if (!pair) return;
-    setOutlineVisibility(pair.A, false);
-    setOutlineVisibility(pair.B, false);
+    Object.values(pair).forEach((data) => {
+      setOutlineVisibility(data, false);
+    });
   });
 }
 
@@ -570,11 +647,7 @@ function updateZoomPane(side, data, xRatio, yRatio, zoomLevel) {
   const pane = zoomPaneMap[side];
   if (!pane) return;
 
-  const labelText =
-    side === "A"
-      ? labelAInput.value.trim() || "A"
-      : labelBInput.value.trim() || "B";
-  pane.label.textContent = labelText;
+  pane.label.textContent = getLabelForSide(side);
 
   if (!data || !data.img || data.img.dataset.loadError === "true") {
     const message =
@@ -614,12 +687,15 @@ function positionZoomPreview(clientY, pair, hoveredImg) {
   const rect = zoomPreview.getBoundingClientRect();
   let centerX = window.innerWidth / 2;
 
-  if (pair && pair.A && pair.B && pair.A.img && pair.B.img) {
-    const rectA = pair.A.img.getBoundingClientRect();
-    const rectB = pair.B.img.getBoundingClientRect();
-    const leftEdge = Math.min(rectA.left, rectB.left);
-    const rightEdge = Math.max(rectA.right, rectB.right);
-    centerX = (leftEdge + rightEdge) / 2;
+  if (pair) {
+    const rects = getActiveSides()
+      .map((side) => pair[side]?.img?.getBoundingClientRect())
+      .filter(Boolean);
+    if (rects.length) {
+      const leftEdge = Math.min(...rects.map((rectItem) => rectItem.left));
+      const rightEdge = Math.max(...rects.map((rectItem) => rectItem.right));
+      centerX = (leftEdge + rightEdge) / 2;
+    }
   } else if (hoveredImg) {
     const rectImg = hoveredImg.getBoundingClientRect();
     centerX = (rectImg.left + rectImg.right) / 2;
@@ -662,10 +738,11 @@ function showZoomForImage(img, clientX, clientY, shiftKey) {
   const yRatio = (clientY - rect.top) / rect.height;
   const zoomLevel = getZoomLevel();
 
-  updateZoomPane("A", pair.A, xRatio, yRatio, zoomLevel);
-  updateZoomPane("B", pair.B, xRatio, yRatio, zoomLevel);
-  updateZoomOutline(pair.A, xRatio, yRatio, zoomLevel);
-  updateZoomOutline(pair.B, xRatio, yRatio, zoomLevel);
+  getActiveSides().forEach((side) => {
+    const data = pair[side];
+    updateZoomPane(side, data, xRatio, yRatio, zoomLevel);
+    updateZoomOutline(data, xRatio, yRatio, zoomLevel);
+  });
 
   zoomPreview.classList.add("visible");
   positionZoomPreview(clientY, pair, img);
@@ -706,12 +783,9 @@ function handleZoomKeyChange(event) {
 }
 
 function renderComparisons() {
-  const labelA = labelAInput.value.trim() || "A";
-  const labelB = labelBInput.value.trim() || "B";
-  const aIds = parseJobIds(jobsAInput.value);
-  const bIds = parseJobIds(jobsBInput.value);
-  const mode = getEffectiveMode(aIds, bIds);
-  const pairCount = Math.max(aIds.length, bIds.length);
+  const sideData = getActiveSideData();
+  const mode = getEffectiveMode(sideData.map((entry) => entry.jobIds));
+  const pairCount = Math.max(0, ...sideData.map((entry) => entry.jobIds.length));
 
   pairRegistry.clear();
   comparisonsEl.innerHTML = "";
@@ -724,8 +798,6 @@ function renderComparisons() {
   }
 
   for (let i = 0; i < pairCount; i += 1) {
-    const jobA = aIds[i] || "";
-    const jobB = bIds[i] || "";
     const card = createElement("div", "comparison-card");
 
     const header = createElement("div", "comparison-header");
@@ -741,10 +813,10 @@ function renderComparisons() {
 
     const pairId = `pair-${i}`;
     if (mode === "grid") {
-      card.appendChild(renderGridPair(labelA, labelB, jobA, jobB, pairId));
+      card.appendChild(renderGridPair(sideData, i, pairId));
     } else {
       card.appendChild(
-        renderIndividualPair(labelA, labelB, jobA, jobB, pairId)
+        renderIndividualPair(sideData, i, pairId)
       );
     }
 
@@ -755,43 +827,36 @@ function renderComparisons() {
   refreshPairCards();
 }
 
-function renderGridPair(labelA, labelB, jobA, jobB, pairId) {
+function renderGridPair(sideData, pairIndex, pairId) {
   const grid = createElement("div", "pair-grid");
-  grid.appendChild(
-    createSideCard(labelA, jobA, buildGridUrl(jobA), pairId, "A")
-  );
-  grid.appendChild(
-    createSideCard(labelB, jobB, buildGridUrl(jobB), pairId, "B")
-  );
+  sideData.forEach((entry) => {
+    const jobId = entry.jobIds[pairIndex] || "";
+    grid.appendChild(
+      createSideCard(entry.label, jobId, buildGridUrl(jobId), pairId, entry.side)
+    );
+  });
   return grid;
 }
 
-function renderIndividualPair(labelA, labelB, jobA, jobB, pairId) {
+function renderIndividualPair(sideData, pairIndex, pairId) {
   const container = createElement("div", "image-rows");
 
   for (let index = 0; index < IMAGE_COUNT; index += 1) {
     const row = createElement("div", "image-row");
     const rowPairId = `${pairId}-img-${index}`;
-    row.appendChild(
-      createImageCell(
-        labelA,
-        index,
-        jobA,
-        buildIndividualUrl(jobA, index),
-        rowPairId,
-        "A"
-      )
-    );
-    row.appendChild(
-      createImageCell(
-        labelB,
-        index,
-        jobB,
-        buildIndividualUrl(jobB, index),
-        rowPairId,
-        "B"
-      )
-    );
+    sideData.forEach((entry) => {
+      const jobId = entry.jobIds[pairIndex] || "";
+      row.appendChild(
+        createImageCell(
+          entry.label,
+          index,
+          jobId,
+          buildIndividualUrl(jobId, index),
+          rowPairId,
+          entry.side
+        )
+      );
+    });
     container.appendChild(row);
   }
 
@@ -844,8 +909,10 @@ function buildIndividualUrl(jobId, index) {
 function clearInputs() {
   labelAInput.value = "";
   labelBInput.value = "";
+  if (labelCInput) labelCInput.value = "";
   jobsAInput.value = "";
   jobsBInput.value = "";
+  if (jobsCInput) jobsCInput.value = "";
   comparisonsEl.innerHTML = "";
   pairRegistry.clear();
   hideZoomPreview();
@@ -858,11 +925,13 @@ function init() {
   const urlState = parseStateFromUrl();
   const storedState = urlState ? null : loadStateFromStorage();
   applyState(urlState || storedState);
+  updateColumnVisibility();
   updateStatus();
 
   zoomPreview = createZoomPreview();
   zoomPreview.style.setProperty("--zoom-pane-size", `${getZoomSize()}px`);
   document.body.appendChild(zoomPreview);
+  updateZoomPreviewVisibility();
 
   const handleInputChange = () => {
     scheduleRender();
@@ -894,8 +963,18 @@ function init() {
   viewModeSelect.addEventListener("change", handleInputChange);
   jobsAInput.addEventListener("input", handleInputChange);
   jobsBInput.addEventListener("input", handleInputChange);
+  if (jobsCInput) jobsCInput.addEventListener("input", handleInputChange);
   labelAInput.addEventListener("input", handleInputChange);
   labelBInput.addEventListener("input", handleInputChange);
+  if (labelCInput) labelCInput.addEventListener("input", handleInputChange);
+  if (columnCountSelect) {
+    columnCountSelect.addEventListener("change", () => {
+      hideZoomPreview();
+      updateColumnVisibility();
+      scheduleRender();
+      scheduleSave();
+    });
+  }
   zoomEnabledInput.addEventListener("change", () => {
     hideZoomPreview();
     scheduleSave();

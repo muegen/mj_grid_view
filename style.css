@@ -80,7 +80,7 @@ img {
 
 .settings-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 
@@ -297,6 +297,10 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.is-hidden {
+  display: none;
+}
+
 .input-card h2 {
   margin: 0 0 12px;
   font-size: 18px;
@@ -470,6 +474,10 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.zoom-pane.is-hidden {
+  display: none;
 }
 
 .zoom-pane-label {
