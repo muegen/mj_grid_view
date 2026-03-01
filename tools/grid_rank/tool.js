@@ -40,6 +40,8 @@ export function init({ root }) {
   const rankCopyBtn = root.querySelector("#rankCopyBtn");
   const rankSummaryStatusEl = root.querySelector("#rankSummaryStatus");
   const rankInputCardC = root.querySelector("#rankInputCardC");
+  const shortcutsToggle = root.querySelector("#rankShortcutsToggle");
+  const shortcutsPanel = root.querySelector("#rankShortcutsPanel");
 
   const pairRegistry = new Map();
   const rankSelections = new Map();
@@ -59,6 +61,32 @@ export function init({ root }) {
 
   const controller = new AbortController();
   const { signal } = controller;
+
+  function setShortcutsOpen(isOpen) {
+    if (!shortcutsPanel || !shortcutsToggle) return;
+    shortcutsPanel.hidden = !isOpen;
+    shortcutsToggle.setAttribute("aria-expanded", isOpen.toString());
+  }
+
+  function toggleShortcuts() {
+    if (!shortcutsPanel) return;
+    setShortcutsOpen(shortcutsPanel.hidden);
+  }
+
+  function handleShortcutsToggle(event) {
+    event.stopPropagation();
+    toggleShortcuts();
+  }
+
+  function handleShortcutsOutside(event) {
+    if (!shortcutsPanel || shortcutsPanel.hidden) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    if (shortcutsPanel.contains(target) || shortcutsToggle?.contains(target)) {
+      return;
+    }
+    setShortcutsOpen(false);
+  }
 
   function getSelectedColumnCount() {
     if (!rankColumnCountSelect) return 2;
@@ -707,6 +735,10 @@ export function init({ root }) {
 
   rankComparisonsEl.addEventListener("click", handleRankSelectionClick, { signal });
   document.addEventListener("keydown", handleRankShortcutKey, { signal });
+  if (shortcutsToggle) {
+    shortcutsToggle.addEventListener("click", handleShortcutsToggle, { signal });
+    document.addEventListener("click", handleShortcutsOutside, { signal });
+  }
 
   if (rankCopyBtn) {
     rankCopyBtn.addEventListener("click", copyRankSummary, { signal });

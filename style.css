@@ -94,7 +94,7 @@ img {
 .controls,
 .rank-controls {
   margin-top: 24px;
-  padding: 16px;
+  padding: 12px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -102,6 +102,181 @@ img {
   position: sticky;
   top: 12px;
   z-index: 1200;
+}
+
+.control-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.control-group-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.control-group-zoom .control {
+  min-width: 140px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.control-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.control-group-toggles .control {
+  font-size: 13px;
+}
+
+.control-group-actions {
+  min-width: 200px;
+}
+
+.control-group-nav .nav-controls {
+  gap: 8px;
+}
+
+.control-group-nav .pair-indicator {
+  font-size: 12px;
+}
+
+.control-actions.compact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.control-actions.compact-actions button {
+  width: auto;
+  min-width: 120px;
+}
+
+.control-advanced {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f9fafc;
+}
+
+.control-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  list-style: none;
+}
+
+.control-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-advanced summary::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.2s ease;
+}
+
+.control-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.control-advanced .meta-row {
+  margin-top: 8px;
+}
+
+.control-advanced .shortcuts {
+  margin-top: 8px;
+}
+
+.control-advanced .share-status {
+  margin-top: 6px;
+}
+
+.shortcut-fab {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 1500;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eef1f6;
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.shortcut-fab:hover {
+  background: #e1e6ef;
+}
+
+.shortcut-panel {
+  position: fixed;
+  left: 24px;
+  bottom: 78px;
+  z-index: 1500;
+  width: 260px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shortcut-panel .shortcuts-title {
+  margin-bottom: 6px;
+}
+
+.section-toggle {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 6px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.section-toggle > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  list-style: none;
+  padding: 6px 8px;
+}
+
+.section-toggle > summary::-webkit-details-marker {
+  display: none;
+}
+
+.section-toggle > summary::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.2s ease;
+}
+
+.section-toggle[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.section-toggle .favorites-card,
+.section-toggle .rank-summary-card {
+  margin-top: 6px;
 }
 
 .control-grid {
@@ -735,6 +910,33 @@ button:focus-visible {
   .controls,
   .rank-controls {
     padding: 10px;
+  }
+
+  .control-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .control-group-row {
+    width: 100%;
+  }
+
+  .control-group-zoom .control {
+    min-width: 0;
+    flex: 1 1 160px;
+  }
+
+  .control-actions.compact-actions {
+    width: 100%;
+  }
+
+  .control-actions.compact-actions button {
+    width: 100%;
+  }
+
+  .shortcut-panel {
+    width: calc(100% - 48px);
+    right: 24px;
   }
 
   .settings-block {

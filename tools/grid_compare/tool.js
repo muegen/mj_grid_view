@@ -46,6 +46,8 @@ export function init({ root }) {
   const favoritesEmptyEl = root.querySelector("#favoritesEmpty");
   const favoritesCopyBtn = root.querySelector("#favoritesCopyBtn");
   const favoritesStatusEl = root.querySelector("#favoritesStatus");
+  const shortcutsToggle = root.querySelector("#shortcutsToggle");
+  const shortcutsPanel = root.querySelector("#shortcutsPanel");
 
   const pairRegistry = new Map();
   const favoritesMap = new Map();
@@ -66,6 +68,32 @@ export function init({ root }) {
 
   const controller = new AbortController();
   const { signal } = controller;
+
+  function setShortcutsOpen(isOpen) {
+    if (!shortcutsPanel || !shortcutsToggle) return;
+    shortcutsPanel.hidden = !isOpen;
+    shortcutsToggle.setAttribute("aria-expanded", isOpen.toString());
+  }
+
+  function toggleShortcuts() {
+    if (!shortcutsPanel) return;
+    setShortcutsOpen(shortcutsPanel.hidden);
+  }
+
+  function handleShortcutsToggle(event) {
+    event.stopPropagation();
+    toggleShortcuts();
+  }
+
+  function handleShortcutsOutside(event) {
+    if (!shortcutsPanel || shortcutsPanel.hidden) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    if (shortcutsPanel.contains(target) || shortcutsToggle?.contains(target)) {
+      return;
+    }
+    setShortcutsOpen(false);
+  }
 
   function getSelectedColumnCount() {
     if (!columnCountSelect) return 2;
@@ -839,6 +867,11 @@ export function init({ root }) {
   comparisonsEl.addEventListener("mouseleave", () => {
     lastHoverImg = null;
   }, { signal });
+
+  if (shortcutsToggle) {
+    shortcutsToggle.addEventListener("click", handleShortcutsToggle, { signal });
+    document.addEventListener("click", handleShortcutsOutside, { signal });
+  }
 
   document.addEventListener("keydown", handlePairNavigationKey, { signal });
 
