@@ -1,0 +1,211 @@
+<section class="tool-section tool-compare">
+  <section class="controls">
+    <div class="control-grid">
+      <div class="settings-block">
+        <div class="control-row settings-row">
+          <label class="control">
+            View mode (g)
+            <select id="viewMode">
+              <option value="auto" selected>
+                Auto (based on input count)
+              </option>
+              <option value="individual">Individual images</option>
+              <option value="grid">Grid</option>
+            </select>
+          </label>
+          <label class="control">
+            Columns
+            <select id="columnCount">
+              <option value="2" selected>2 columns</option>
+              <option value="3">3 columns</option>
+            </select>
+          </label>
+          <label class="control">
+            Zoom level (z)
+            <select id="zoomLevel">
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+              <option value="3" selected>3x</option>
+              <option value="4">4x</option>
+              <option value="5">5x</option>
+              <option value="6">6x</option>
+              <option value="7">7x</option>
+              <option value="8">8x</option>
+              <option value="9">9x</option>
+              <option value="10">10x</option>
+              <option value="11">11x</option>
+              <option value="12">12x</option>
+            </select>
+          </label>
+          <label class="control">
+            Zoom panel size (s)
+            <select id="zoomSize">
+              <option value="200">Small</option>
+              <option value="300" selected>Medium</option>
+              <option value="360">Large</option>
+              <option value="480">X-Large</option>
+              <option value="600">XX-Large</option>
+              <option value="720">XXX-Large</option>
+            </select>
+          </label>
+        </div>
+        <div class="control-row toggle-row">
+          <label class="control checkbox-control">
+            <input id="zoomEnabled" type="checkbox" checked />
+            Enable zoom preview (p)
+          </label>
+          <label class="control checkbox-control">
+            <input id="zoomRequiresShift" type="checkbox" checked />
+            Hold Shift to zoom (h)
+          </label>
+        </div>
+        <div class="meta-row">
+          <div class="hint">
+            Jobs are paired by order (A1 <-> B1 <-> C1 if enabled). Extra jobs
+            show as missing. Hover an image to use the zoom preview (hold Shift if
+            enabled).
+          </div>
+          <div id="status" class="status"></div>
+        </div>
+      </div>
+      <div class="control-actions">
+        <button id="renderBtn" class="primary action-render">Render</button>
+        <button id="clearBtn" class="secondary action-clear" type="button">
+          Clear
+        </button>
+        <button id="shareBtn" class="secondary action-share" type="button">
+          Copy link
+        </button>
+        <div class="shortcuts">
+          <div class="shortcuts-title">Shortcuts</div>
+          <div class="shortcuts-list">
+            <span class="shortcut-item">J/K: pairs</span>
+            <span class="shortcut-item">G: view mode</span>
+            <span class="shortcut-item">Z: zoom level</span>
+            <span class="shortcut-item">S: zoom panel size</span>
+            <span class="shortcut-item">F: favorite</span>
+            <span class="shortcut-item">P: preview</span>
+            <span class="shortcut-item">H: hold shift</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-row">
+        <div class="nav-controls">
+          <button id="prevPairBtn" class="secondary" type="button">
+            Prev pair (j)
+          </button>
+          <div id="pairIndicator" class="pair-indicator">Pair 0 of 0</div>
+          <button id="nextPairBtn" class="secondary" type="button">
+            Next pair (k)
+          </button>
+        </div>
+        <div id="shareStatus" class="share-status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="favorites">
+    <div class="favorites-card">
+      <div class="favorites-header">
+        <h2>Favorites</h2>
+        <button
+          id="favoritesCopyBtn"
+          class="icon-button"
+          type="button"
+          aria-label="Copy favorites"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H10V7h9v14Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="favorites-hint">
+        Hover an image and press F to toggle a favorite.
+      </div>
+      <div id="favoritesStatus" class="favorites-status"></div>
+      <div class="favorites-table-wrapper">
+        <table class="favorites-table" aria-label="Favorite selections">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Favorites</th>
+            </tr>
+          </thead>
+          <tbody id="favoritesBody"></tbody>
+        </table>
+        <div id="favoritesEmpty" class="favorites-empty">
+          No favorites yet.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="inputs">
+    <div class="input-card">
+      <h2>A (Left)</h2>
+      <label class="control">
+        Label
+        <input
+          id="labelA"
+          type="text"
+          placeholder="Example: Baseline"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="jobsA"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+    <div class="input-card">
+      <h2>B (Right)</h2>
+      <label class="control">
+        Label
+        <input
+          id="labelB"
+          type="text"
+          placeholder="Example: New Model"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="jobsB"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+    <div class="input-card is-hidden" id="inputCardC" hidden>
+      <h2>C (Optional)</h2>
+      <label class="control">
+        Label
+        <input
+          id="labelC"
+          type="text"
+          placeholder="Example: Alternative"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="jobsC"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+  </section>
+
+  <section class="output">
+    <div id="comparisons" class="comparisons"></div>
+  </section>
+</section>

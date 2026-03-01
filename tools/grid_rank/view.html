@@ -1,0 +1,201 @@
+<section class="tool-section tool-rank">
+  <section class="rank-controls">
+    <div class="control-grid">
+      <div class="settings-block">
+        <div class="control-row settings-row">
+          <label class="control">
+            View mode
+            <select id="rankViewMode">
+              <option value="auto" selected>
+                Auto (based on input count)
+              </option>
+              <option value="individual">Individual images</option>
+              <option value="grid">Grid</option>
+            </select>
+          </label>
+          <label class="control">
+            Columns
+            <select id="rankColumnCount">
+              <option value="2" selected>2 columns</option>
+              <option value="3">3 columns</option>
+            </select>
+          </label>
+          <label class="control">
+            Zoom level
+            <select id="rankZoomLevel">
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+              <option value="3" selected>3x</option>
+              <option value="4">4x</option>
+              <option value="5">5x</option>
+              <option value="6">6x</option>
+              <option value="7">7x</option>
+              <option value="8">8x</option>
+              <option value="9">9x</option>
+              <option value="10">10x</option>
+              <option value="11">11x</option>
+              <option value="12">12x</option>
+            </select>
+          </label>
+          <label class="control">
+            Zoom panel size
+            <select id="rankZoomSize">
+              <option value="200">Small</option>
+              <option value="300" selected>Medium</option>
+              <option value="360">Large</option>
+              <option value="480">X-Large</option>
+              <option value="600">XX-Large</option>
+              <option value="720">XXX-Large</option>
+            </select>
+          </label>
+        </div>
+        <div class="control-row toggle-row">
+          <label class="control checkbox-control">
+            <input id="rankZoomEnabled" type="checkbox" checked />
+            Enable zoom preview
+          </label>
+          <label class="control checkbox-control">
+            <input id="rankZoomRequiresShift" type="checkbox" checked />
+            Hold Shift to zoom
+          </label>
+        </div>
+        <div class="meta-row">
+          <div class="hint">
+            Ranking shows one job set at a time in a shuffled order.
+          </div>
+          <div id="rankStatus" class="status"></div>
+        </div>
+      </div>
+      <div class="control-actions">
+        <button id="rankStartBtn" class="primary action-render">
+          Start ranking
+        </button>
+        <button id="rankClearBtn" class="secondary action-clear" type="button">
+          Clear
+        </button>
+        <div class="shortcuts">
+          <div class="shortcuts-title">Tips</div>
+          <div class="shortcuts-list">
+            <span class="shortcut-item">Click an option to select</span>
+            <span class="shortcut-item">1/2: left/right, 4: skip</span>
+            <span class="shortcut-item">
+              3-column: 1/2/3 pick option, 4 skips
+            </span>
+            <span class="shortcut-item">Selections appear in summary</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-row">
+        <div class="nav-controls">
+          <div id="rankProgress" class="pair-indicator">Round 0 of 0</div>
+        </div>
+        <div id="rankSelectionStatus" class="share-status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="inputs">
+    <div class="input-card">
+      <h2>Set A</h2>
+      <label class="control">
+        Label
+        <input
+          id="rankLabelA"
+          type="text"
+          placeholder="Example: Baseline"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="rankJobsA"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+    <div class="input-card">
+      <h2>Set B</h2>
+      <label class="control">
+        Label
+        <input
+          id="rankLabelB"
+          type="text"
+          placeholder="Example: New Model"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="rankJobsB"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+    <div class="input-card is-hidden" id="rankInputCardC" hidden>
+      <h2>Set C (Optional)</h2>
+      <label class="control">
+        Label
+        <input
+          id="rankLabelC"
+          type="text"
+          placeholder="Example: Alternative"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="rankJobsC"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+  </section>
+
+  <section class="output">
+    <div id="rankComparisons" class="comparisons rank-comparisons"></div>
+  </section>
+
+  <section class="rank-summary">
+    <div class="rank-summary-card">
+      <div class="rank-summary-header">
+        <h2>Ranking Summary</h2>
+        <button
+          id="rankCopyBtn"
+          class="icon-button"
+          type="button"
+          aria-label="Copy ranking summary"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H10V7h9v14Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="rank-summary-hint">
+        Selections update as you rank. Copy to export.
+      </div>
+      <div id="rankSummaryStatus" class="favorites-status"></div>
+      <div class="favorites-table-wrapper">
+        <table class="favorites-table" aria-label="Ranking selections">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Selections</th>
+            </tr>
+          </thead>
+          <tbody id="rankSummaryBody"></tbody>
+        </table>
+        <div id="rankSummaryEmpty" class="favorites-empty">
+          No selections yet.
+        </div>
+      </div>
+    </div>
+  </section>
+</section>

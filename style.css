@@ -51,6 +51,10 @@ img {
   margin-top: 20px;
 }
 
+.tool-mount {
+  margin-top: 24px;
+}
+
 .tool-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

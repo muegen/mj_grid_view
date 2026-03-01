@@ -1,11 +1,12 @@
-# MJ Grid Compare
+# MJ Grid Tools
 
-Simple, static web tool for A/B image evaluation of Midjourney jobs. Runs
+Simple, static web tool suite for comparing and ranking Midjourney jobs. Runs
 locally in your browser.
 
 ## Features
 
 - Compare two jobs side-by-side (A vs B).
+- Rank job sets blindly with a shuffled order and exportable summary.
 - Paste job IDs or full CDN URLs (grid or individual URLs both work).
 - Auto view mode: individual images for single inputs, grids for multi inputs.
 - Manual view mode toggle to force grid or individual views.
@@ -18,6 +19,10 @@ locally in your browser.
 - Clean layout optimized for quick visual scans.
 
 ## Usage (Local)
+
+Serve the project over HTTP so ES modules and tool templates can load
+(`python -m http.server` from the repo root, then visit `http://localhost:8000`).
+When you are done, stop the server with Ctrl+C in the terminal.
 
 1. Paste job IDs into A and B (one per line or comma-separated).
 2. Optional: set labels for A and B.
