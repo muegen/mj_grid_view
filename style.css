@@ -497,6 +497,77 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.input-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.scale-filters,
+.scale-output {
+  margin-top: 24px;
+}
+
+.filters-card {
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.scale-grid-wrapper {
+  display: grid;
+  gap: 16px;
+}
+
+.scale-grid {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.scale-grid-single {
+  grid-auto-rows: auto;
+}
+
+.scale-axis {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  background: #f3f5f9;
+  border-radius: 10px;
+}
+
+.scale-axis-y {
+  justify-content: flex-start;
+}
+
+.scale-axis-corner {
+  background: transparent;
+}
+
+.scale-cell {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scale-cell-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .favorites {
   margin-top: 24px;
 }

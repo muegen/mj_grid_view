@@ -13,6 +13,11 @@ const TOOL_CONFIG = {
     viewPath: "./tools/grid_rank/view.html",
     modulePath: "./tools/grid_rank/tool.js",
   },
+  scale: {
+    id: "scale",
+    viewPath: "./tools/grid_scale/view.html",
+    modulePath: "./tools/grid_scale/tool.js",
+  },
 };
 
 let activeTool = null;

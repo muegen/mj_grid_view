@@ -1,12 +1,13 @@
 # MJ Grid Tools
 
-Simple, static web tool suite for comparing and ranking Midjourney jobs. Runs
-locally in your browser.
+Simple, static web tool suite for comparing, ranking, and scaling Midjourney
+jobs. Runs locally in your browser.
 
 ## Features
 
 - Compare two or three job sets side-by-side.
 - Rank job sets blindly with a shuffled order and exportable summary.
+- Scale parameter sweeps across one or two axes from TSV input.
 - Paste job IDs or full CDN URLs (grid or individual URLs both work).
 - Auto view mode: individual images for single inputs, grids for multi inputs.
 - Manual view mode toggle to force grid or individual views.
@@ -42,3 +43,11 @@ Use the **/** button to see shortcuts for each tool. Rank selections use **1/2**
 
 Jobs are paired by order: A1 <-> B1, A2 <-> B2, etc. If the counts differ, unmatched
 items show as missing.
+
+## Usage (Scale)
+
+1. Switch to **Grid Scale**.
+2. Paste TSV data with a `job_id` column and parameter columns.
+3. Choose X/Y axes or use Y = None for a 1D sweep.
+4. Adjust grid density or row limit as needed.
+5. Use the filters panel to lock other parameters.

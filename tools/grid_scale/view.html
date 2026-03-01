@@ -1,0 +1,151 @@
+<section class="tool-section tool-scale">
+  <section class="controls scale-controls">
+    <div class="control-bar">
+      <div class="control-group">
+        <div class="control-group-title">View</div>
+        <label class="control">
+          Mode (g)
+          <select id="scaleViewMode">
+            <option value="grid" selected>Grid</option>
+            <option value="individual">Individual images</option>
+          </select>
+        </label>
+        <label class="control" id="scaleImageIndexControl">
+          Image index
+          <select id="scaleImageIndex">
+            <option value="0" selected>1</option>
+            <option value="1">2</option>
+            <option value="2">3</option>
+            <option value="3">4</option>
+          </select>
+        </label>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">Axes</div>
+        <div class="control-group-row">
+          <label class="control">
+            X axis
+            <select id="scaleAxisX"></select>
+          </label>
+          <label class="control">
+            Y axis
+            <select id="scaleAxisY"></select>
+          </label>
+          <button id="scaleSwapAxes" class="secondary" type="button">
+            Swap
+          </button>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-group-title">Layout</div>
+        <label class="control" id="scaleRowLimitControl">
+          Row limit
+          <input id="scaleRowLimit" type="number" min="1" value="10" />
+        </label>
+        <label class="control" id="scaleGridDensityControl">
+          Grid density
+          <input id="scaleGridDensity" type="number" min="2" value="10" />
+        </label>
+      </div>
+      <div class="control-group control-group-zoom">
+        <div class="control-group-title">Zoom</div>
+        <div class="control-group-row">
+          <label class="control">
+            Level (z)
+            <select id="scaleZoomLevel">
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+              <option value="3" selected>3x</option>
+              <option value="4">4x</option>
+              <option value="5">5x</option>
+              <option value="6">6x</option>
+              <option value="7">7x</option>
+              <option value="8">8x</option>
+              <option value="9">9x</option>
+              <option value="10">10x</option>
+              <option value="11">11x</option>
+              <option value="12">12x</option>
+            </select>
+          </label>
+          <label class="control">
+            Panel size (s)
+            <select id="scaleZoomSize">
+              <option value="200">Small</option>
+              <option value="300" selected>Medium</option>
+              <option value="360">Large</option>
+              <option value="480">X-Large</option>
+              <option value="600">XX-Large</option>
+              <option value="720">XXX-Large</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="control-row-break" aria-hidden="true"></div>
+      <div class="control-group control-group-actions">
+        <div class="control-group-title">Actions</div>
+        <div class="control-actions compact-actions">
+          <button id="scaleClearBtn" class="secondary" type="button">
+            Clear data
+          </button>
+          <button id="scaleShareBtn" class="secondary" type="button">
+            Copy link
+          </button>
+        </div>
+      </div>
+      <div class="control-group control-group-status">
+        <div class="control-group-title">Status</div>
+        <div id="scaleStatus" class="status"></div>
+        <div id="scaleShareStatus" class="share-status"></div>
+      </div>
+    </div>
+
+    <button
+      id="scaleShortcutsToggle"
+      class="shortcut-fab"
+      type="button"
+      aria-label="Show shortcuts"
+      aria-expanded="false"
+    >
+      /
+    </button>
+    <div id="scaleShortcutsPanel" class="shortcut-panel" hidden>
+      <div class="shortcuts-title">Tips</div>
+      <div class="shortcuts-list">
+        <span class="shortcut-item">/: shortcuts</span>
+        <span class="shortcut-item">G: view mode</span>
+        <span class="shortcut-item">Z: zoom level</span>
+        <span class="shortcut-item">S: zoom panel size</span>
+        <span class="shortcut-item">H: shift-to-preview</span>
+        <span class="shortcut-item">1-4: image index (individual)</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="inputs">
+    <div class="input-card">
+      <h2>Scale Data</h2>
+      <label class="control">
+        Paste TSV (header row + values)
+        <textarea
+          id="scaleDataInput"
+          rows="8"
+          placeholder="job_id\t--s\t--exp\t--c"
+        ></textarea>
+      </label>
+      <div class="input-hint">
+        Tab-separated values copied from a spreadsheet.
+      </div>
+    </div>
+  </section>
+
+  <section class="scale-filters">
+    <details class="section-toggle">
+      <summary>Filters</summary>
+      <div class="filters-card" id="scaleFiltersBody"></div>
+    </details>
+  </section>
+
+  <section class="scale-output">
+    <div id="scaleGrid" class="scale-grid-wrapper"></div>
+  </section>
+</section>
