@@ -32,7 +32,6 @@ export function init({ root }) {
   const rankShareBtn = root.querySelector("#rankShareBtn");
   const rankProgressEl = root.querySelector("#rankProgress");
   const rankSelectionStatusEl = root.querySelector("#rankSelectionStatus");
-  const rankShareStatusEl = root.querySelector("#rankShareStatus");
   const rankSummaryBody = root.querySelector("#rankSummaryBody");
   const rankSummaryEmptyEl = root.querySelector("#rankSummaryEmpty");
   const rankCopyBtn = root.querySelector("#rankCopyBtn");
@@ -54,7 +53,6 @@ export function init({ root }) {
   let rankOrderIndex = -1;
   let rankDisplayOrder = [];
   let selectionStatusTimer = null;
-  let shareStatusTimer = null;
   let summaryStatusTimer = null;
   let saveTimer = null;
   let zoomRequiresShift = true;
@@ -185,17 +183,6 @@ export function init({ root }) {
     selectionStatusTimer = window.setTimeout(() => {
       rankSelectionStatusEl.textContent = "";
       rankSelectionStatusEl.classList.remove("is-error");
-    }, 2000);
-  }
-
-  function showRankShareStatus(message, isError = false) {
-    if (!rankShareStatusEl) return;
-    if (shareStatusTimer) window.clearTimeout(shareStatusTimer);
-    rankShareStatusEl.textContent = message;
-    rankShareStatusEl.classList.toggle("is-error", Boolean(isError));
-    shareStatusTimer = window.setTimeout(() => {
-      rankShareStatusEl.textContent = "";
-      rankShareStatusEl.classList.remove("is-error");
     }, 2000);
   }
 
@@ -353,9 +340,9 @@ export function init({ root }) {
     try {
       const ok = await copyText(link);
       if (!ok) throw new Error("Clipboard unavailable");
-      showRankShareStatus("Share link copied.");
+      showRankSelectionStatus("Share link copied.");
     } catch (error) {
-      showRankShareStatus("Copy failed. Link in console.", true);
+      showRankSelectionStatus("Copy failed. Link in console.", true);
       console.info("Share link:", link);
     }
   }
@@ -591,6 +578,10 @@ export function init({ root }) {
 
   function handleRankShortcutKey(event) {
     if (isEditableTarget(event.target)) return;
+    if (event.key === "/" || event.key === "?") {
+      event.preventDefault();
+      toggleShortcuts();
+    }
     const indexMap = { "1": 0, "2": 1, "3": 2 };
     if (event.key in indexMap) {
       const side = rankDisplayOrder[indexMap[event.key]];
@@ -811,7 +802,6 @@ export function init({ root }) {
     destroy: () => {
       controller.abort();
       if (selectionStatusTimer) window.clearTimeout(selectionStatusTimer);
-      if (shareStatusTimer) window.clearTimeout(shareStatusTimer);
       if (summaryStatusTimer) window.clearTimeout(summaryStatusTimer);
       if (saveTimer) window.clearTimeout(saveTimer);
       zoomManager.destroy();

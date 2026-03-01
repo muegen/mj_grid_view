@@ -21,3 +21,4 @@ the hub layout.
 
 - Tools are loaded via `fetch` and ES module imports, so run a local HTTP server.
 - Keep shared behavior in `tools/shared/` to avoid duplication.
+- Use `?tool=<tool_id>` in the URL to deep-link to a tool (e.g. `?tool=rank`).

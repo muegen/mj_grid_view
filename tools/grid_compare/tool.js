@@ -446,6 +446,10 @@ export function init({ root }) {
 
   function handlePairNavigationKey(event) {
     if (isEditableTarget(event.target)) return;
+    if (event.key === "/" || event.key === "?") {
+      event.preventDefault();
+      toggleShortcuts();
+    }
     if (event.key === "k" || event.key === "K") {
       event.preventDefault();
       setActivePair(currentPairIndex + 1);
