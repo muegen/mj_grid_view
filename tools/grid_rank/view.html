@@ -4,7 +4,7 @@
       <div class="control-group">
         <div class="control-group-title">View</div>
         <label class="control">
-          View mode
+          View mode (g)
           <select id="rankViewMode">
             <option value="auto" selected>
               Auto (based on input count)
@@ -28,7 +28,7 @@
         <div class="control-group-title">Zoom</div>
         <div class="control-group-row">
           <label class="control">
-            Level
+            Level (z)
             <select id="rankZoomLevel">
               <option value="1.5">1.5x</option>
               <option value="2">2x</option>
@@ -45,7 +45,7 @@
             </select>
           </label>
           <label class="control">
-            Panel size
+            Panel size (s)
             <select id="rankZoomSize">
               <option value="200">Small</option>
               <option value="300" selected>Medium</option>
@@ -57,17 +57,7 @@
           </label>
         </div>
       </div>
-      <div class="control-group control-group-toggles">
-        <div class="control-group-title">Toggles</div>
-        <label class="control checkbox-control">
-          <input id="rankZoomEnabled" type="checkbox" checked />
-          Zoom preview
-        </label>
-        <label class="control checkbox-control">
-          <input id="rankZoomRequiresShift" type="checkbox" checked />
-          Hold Shift
-        </label>
-      </div>
+      <div class="control-row-break" aria-hidden="true"></div>
       <div class="control-group control-group-actions">
         <div class="control-group-title">Actions</div>
         <div class="control-actions compact-actions">
@@ -77,6 +67,9 @@
           <button id="rankClearBtn" class="secondary action-clear" type="button">
             Clear
           </button>
+          <button id="rankShareBtn" class="secondary action-share" type="button">
+            Copy link
+          </button>
         </div>
       </div>
       <div class="control-group control-group-nav">
@@ -85,15 +78,13 @@
           <div id="rankProgress" class="pair-indicator">Round 0 of 0</div>
         </div>
       </div>
-    </div>
-
-    <details class="control-advanced">
-      <summary>Advanced details</summary>
-      <div class="meta-row">
+      <div class="control-group control-group-status">
+        <div class="control-group-title">Status</div>
         <div id="rankStatus" class="status"></div>
+        <div id="rankSelectionStatus" class="share-status"></div>
+        <div id="rankShareStatus" class="share-status"></div>
       </div>
-      <div id="rankSelectionStatus" class="share-status"></div>
-    </details>
+    </div>
 
     <button
       id="rankShortcutsToggle"
@@ -112,6 +103,7 @@
         <span class="shortcut-item">
           3-column: 1/2/3 pick option, 4 skips
         </span>
+        <span class="shortcut-item">H: shift-to-preview</span>
         <span class="shortcut-item">Selections appear in summary</span>
       </div>
     </div>

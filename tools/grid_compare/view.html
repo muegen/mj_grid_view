@@ -57,17 +57,7 @@
           </label>
         </div>
       </div>
-      <div class="control-group control-group-toggles">
-        <div class="control-group-title">Toggles</div>
-        <label class="control checkbox-control">
-          <input id="zoomEnabled" type="checkbox" checked />
-          Zoom preview (p)
-        </label>
-        <label class="control checkbox-control">
-          <input id="zoomRequiresShift" type="checkbox" checked />
-          Hold Shift (h)
-        </label>
-      </div>
+      <div class="control-row-break" aria-hidden="true"></div>
       <div class="control-group control-group-actions">
         <div class="control-group-title">Actions</div>
         <div class="control-actions compact-actions">
@@ -83,24 +73,15 @@
       <div class="control-group control-group-nav">
         <div class="control-group-title">Pairs</div>
         <div class="nav-controls">
-          <button id="prevPairBtn" class="secondary" type="button">
-            Prev (j)
-          </button>
           <div id="pairIndicator" class="pair-indicator">Pair 0 of 0</div>
-          <button id="nextPairBtn" class="secondary" type="button">
-            Next (k)
-          </button>
         </div>
       </div>
-    </div>
-
-    <details class="control-advanced">
-      <summary>Advanced details</summary>
-      <div class="meta-row">
+      <div class="control-group control-group-status">
+        <div class="control-group-title">Status</div>
         <div id="status" class="status"></div>
+        <div id="shareStatus" class="share-status"></div>
       </div>
-      <div id="shareStatus" class="share-status"></div>
-    </details>
+    </div>
 
     <button
       id="shortcutsToggle"
@@ -119,8 +100,7 @@
         <span class="shortcut-item">Z: zoom level</span>
         <span class="shortcut-item">S: zoom panel size</span>
         <span class="shortcut-item">F: favorite</span>
-        <span class="shortcut-item">P: preview</span>
-        <span class="shortcut-item">H: hold shift</span>
+        <span class="shortcut-item">H: shift-to-preview</span>
       </div>
     </div>
   </section>

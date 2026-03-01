@@ -34,9 +34,8 @@ When you are done, stop the server with Ctrl+C in the terminal.
 8. Press **G** to toggle view mode (grid/individual).
 9. Press **Z** to cycle zoom levels.
 10. Press **S** to cycle zoom panel sizes.
-11. Press **P** to toggle zoom preview.
-12. Press **H** to toggle the Hold Shift requirement.
-13. Click **Copy link** to generate a shareable URL.
+11. Press **H** to toggle the Hold Shift requirement.
+12. Click **Copy link** to generate a shareable URL.
 
 Jobs are paired by order: A1 <-> B1, A2 <-> B2, etc. If the counts differ, unmatched
 items show as missing.

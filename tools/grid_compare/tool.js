@@ -34,11 +34,7 @@ export function init({ root }) {
   const comparisonsEl = root.querySelector("#comparisons");
   const zoomLevelSelect = root.querySelector("#zoomLevel");
   const zoomSizeSelect = root.querySelector("#zoomSize");
-  const zoomEnabledInput = root.querySelector("#zoomEnabled");
-  const zoomRequiresShiftInput = root.querySelector("#zoomRequiresShift");
   const shareBtn = root.querySelector("#shareBtn");
-  const prevPairBtn = root.querySelector("#prevPairBtn");
-  const nextPairBtn = root.querySelector("#nextPairBtn");
   const pairIndicatorEl = root.querySelector("#pairIndicator");
   const shareStatusEl = root.querySelector("#shareStatus");
   const inputCardC = root.querySelector("#inputCardC");
@@ -65,6 +61,8 @@ export function init({ root }) {
   let saveTimer = null;
   let renderTimer = null;
   let favoritesStatusTimer = null;
+  let scrollTicking = false;
+  let zoomRequiresShift = true;
 
   const controller = new AbortController();
   const { signal } = controller;
@@ -141,8 +139,7 @@ export function init({ root }) {
   }
 
   function shouldZoom(shiftKey) {
-    if (!zoomEnabledInput.checked) return false;
-    if (zoomRequiresShiftInput.checked && !shiftKey) return false;
+    if (zoomRequiresShift && !shiftKey) return false;
     return true;
   }
 
@@ -323,21 +320,8 @@ export function init({ root }) {
     const jobCounts = sideData.map((entry) => entry.jobIds.length);
     const mode = getEffectiveMode(sideData.map((entry) => entry.jobIds));
     const pairCount = Math.max(0, ...jobCounts);
-
-    if (pairCount === 0) {
-      statusEl.textContent = PLACEHOLDER_MESSAGES.empty;
-      return;
-    }
-
     const modeLabel = mode === "grid" ? "Grid" : "Individual";
-    const mismatch = jobCounts.some((count) => count !== jobCounts[0])
-      ? "Counts differ; unmatched jobs will show as missing."
-      : "";
-    const countLabel = sideData
-      .map((entry) => `${entry.side}: ${entry.jobIds.length} job(s)`)
-      .join(" | ");
-
-    statusEl.textContent = `${countLabel} | Mode: ${modeLabel}. ${mismatch}`.trim();
+    statusEl.textContent = `Pairs: ${pairCount} | Mode: ${modeLabel}`;
   }
 
   function updatePairIndicator() {
@@ -350,10 +334,7 @@ export function init({ root }) {
   }
 
   function updatePairControls() {
-    if (!prevPairBtn || !nextPairBtn) return;
-    const hasPairs = pairCards.length > 0;
-    prevPairBtn.disabled = !hasPairs || currentPairIndex <= 0;
-    nextPairBtn.disabled = !hasPairs || currentPairIndex >= pairCards.length - 1;
+    return;
   }
 
   function getStickyOffset() {
@@ -395,6 +376,40 @@ export function init({ root }) {
       comparisonsEl.querySelectorAll(".comparison-card")
     );
     setActivePair(pairCards.length ? 0 : -1, false);
+    updateActivePairFromScroll();
+  }
+
+  function updateActivePairFromScroll() {
+    if (!pairCards.length) {
+      currentPairIndex = -1;
+      updatePairIndicator();
+      return;
+    }
+    const offset = getStickyOffset();
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    pairCards.forEach((card, idx) => {
+      const rect = card.getBoundingClientRect();
+      const distance = Math.abs(rect.top - offset);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = idx;
+      }
+    });
+    if (bestIndex !== currentPairIndex) {
+      setActivePair(bestIndex, false);
+      return;
+    }
+    updatePairIndicator();
+  }
+
+  function handleScroll() {
+    if (scrollTicking) return;
+    scrollTicking = true;
+    window.requestAnimationFrame(() => {
+      scrollTicking = false;
+      updateActivePairFromScroll();
+    });
   }
 
   function toggleZoomLevel() {
@@ -416,14 +431,8 @@ export function init({ root }) {
     zoomManager.refresh();
   }
 
-  function toggleZoomEnabled() {
-    zoomEnabledInput.checked = !zoomEnabledInput.checked;
-    zoomManager.hide();
-    scheduleSave();
-  }
-
   function toggleZoomRequiresShift() {
-    zoomRequiresShiftInput.checked = !zoomRequiresShiftInput.checked;
+    zoomRequiresShift = !zoomRequiresShift;
     zoomManager.hide();
     scheduleSave();
   }
@@ -457,10 +466,6 @@ export function init({ root }) {
       event.preventDefault();
       toggleZoomSize();
     }
-    if (event.key === "p" || event.key === "P") {
-      event.preventDefault();
-      toggleZoomEnabled();
-    }
     if (event.key === "h" || event.key === "H") {
       event.preventDefault();
       toggleZoomRequiresShift();
@@ -490,7 +495,6 @@ export function init({ root }) {
     params.set("vm", state.viewMode);
     params.set("zl", state.zoomLevel);
     params.set("zs", state.zoomSize);
-    params.set("ze", state.zoomEnabled ? "1" : "0");
     params.set("zk", state.zoomRequiresShift ? "1" : "0");
 
     return `${getBaseUrl()}?${params.toString()}`;
@@ -647,8 +651,7 @@ export function init({ root }) {
       viewMode: viewModeSelect.value,
       zoomLevel: zoomLevelSelect.value,
       zoomSize: zoomSizeSelect.value,
-      zoomEnabled: zoomEnabledInput.checked,
-      zoomRequiresShift: zoomRequiresShiftInput.checked,
+      zoomRequiresShift,
     };
   }
 
@@ -666,11 +669,8 @@ export function init({ root }) {
     if (state.viewMode) viewModeSelect.value = state.viewMode;
     if (state.zoomLevel) zoomLevelSelect.value = state.zoomLevel;
     if (state.zoomSize) zoomSizeSelect.value = state.zoomSize;
-    if (typeof state.zoomEnabled === "boolean") {
-      zoomEnabledInput.checked = state.zoomEnabled;
-    }
     if (typeof state.zoomRequiresShift === "boolean") {
-      zoomRequiresShiftInput.checked = state.zoomRequiresShift;
+      zoomRequiresShift = state.zoomRequiresShift;
     }
   }
 
@@ -716,7 +716,6 @@ export function init({ root }) {
       "vm",
       "zl",
       "zs",
-      "ze",
       "zk",
     ];
     const hasAny = keys.some((key) => params.has(key));
@@ -733,12 +732,10 @@ export function init({ root }) {
       viewMode: params.get("vm") || viewModeSelect.value,
       zoomLevel: params.get("zl") || zoomLevelSelect.value,
       zoomSize: params.get("zs") || zoomSizeSelect.value,
-      zoomEnabled:
-        params.get("ze") !== null ? params.get("ze") !== "0" : zoomEnabledInput.checked,
       zoomRequiresShift:
         params.get("zk") !== null
           ? params.get("zk") !== "0"
-          : zoomRequiresShiftInput.checked,
+          : zoomRequiresShift,
     };
   }
 
@@ -812,20 +809,7 @@ export function init({ root }) {
   if (favoritesCopyBtn) {
     favoritesCopyBtn.addEventListener("click", copyFavoritesSummary, { signal });
   }
-  if (prevPairBtn) {
-    prevPairBtn.addEventListener(
-      "click",
-      () => setActivePair(currentPairIndex - 1),
-      { signal }
-    );
-  }
-  if (nextPairBtn) {
-    nextPairBtn.addEventListener(
-      "click",
-      () => setActivePair(currentPairIndex + 1),
-      { signal }
-    );
-  }
+  window.addEventListener("scroll", handleScroll, { signal, passive: true });
 
   viewModeSelect.addEventListener("change", handleInputChange, { signal });
   jobsAInput.addEventListener("input", handleInputChange, { signal });
@@ -846,22 +830,6 @@ export function init({ root }) {
       { signal }
     );
   }
-  zoomEnabledInput.addEventListener(
-    "change",
-    () => {
-      zoomManager.hide();
-      scheduleSave();
-    },
-    { signal }
-  );
-  zoomRequiresShiftInput.addEventListener(
-    "change",
-    () => {
-      zoomManager.hide();
-      scheduleSave();
-    },
-    { signal }
-  );
 
   comparisonsEl.addEventListener("mousemove", handleHover, { signal });
   comparisonsEl.addEventListener("mouseleave", () => {

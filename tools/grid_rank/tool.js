@@ -19,10 +19,6 @@ export function init({ root }) {
   const rankColumnCountSelect = root.querySelector("#rankColumnCount");
   const rankZoomLevelSelect = root.querySelector("#rankZoomLevel");
   const rankZoomSizeSelect = root.querySelector("#rankZoomSize");
-  const rankZoomEnabledInput = root.querySelector("#rankZoomEnabled");
-  const rankZoomRequiresShiftInput = root.querySelector(
-    "#rankZoomRequiresShift"
-  );
   const rankLabelAInput = root.querySelector("#rankLabelA");
   const rankLabelBInput = root.querySelector("#rankLabelB");
   const rankLabelCInput = root.querySelector("#rankLabelC");
@@ -33,8 +29,10 @@ export function init({ root }) {
   const rankComparisonsEl = root.querySelector("#rankComparisons");
   const rankStartBtn = root.querySelector("#rankStartBtn");
   const rankClearBtn = root.querySelector("#rankClearBtn");
+  const rankShareBtn = root.querySelector("#rankShareBtn");
   const rankProgressEl = root.querySelector("#rankProgress");
   const rankSelectionStatusEl = root.querySelector("#rankSelectionStatus");
+  const rankShareStatusEl = root.querySelector("#rankShareStatus");
   const rankSummaryBody = root.querySelector("#rankSummaryBody");
   const rankSummaryEmptyEl = root.querySelector("#rankSummaryEmpty");
   const rankCopyBtn = root.querySelector("#rankCopyBtn");
@@ -56,8 +54,10 @@ export function init({ root }) {
   let rankOrderIndex = -1;
   let rankDisplayOrder = [];
   let selectionStatusTimer = null;
+  let shareStatusTimer = null;
   let summaryStatusTimer = null;
   let saveTimer = null;
+  let zoomRequiresShift = true;
 
   const controller = new AbortController();
   const { signal } = controller;
@@ -134,8 +134,7 @@ export function init({ root }) {
   }
 
   function shouldZoom(shiftKey) {
-    if (!rankZoomEnabledInput.checked) return false;
-    if (rankZoomRequiresShiftInput.checked && !shiftKey) return false;
+    if (zoomRequiresShift && !shiftKey) return false;
     return true;
   }
 
@@ -189,6 +188,17 @@ export function init({ root }) {
     }, 2000);
   }
 
+  function showRankShareStatus(message, isError = false) {
+    if (!rankShareStatusEl) return;
+    if (shareStatusTimer) window.clearTimeout(shareStatusTimer);
+    rankShareStatusEl.textContent = message;
+    rankShareStatusEl.classList.toggle("is-error", Boolean(isError));
+    shareStatusTimer = window.setTimeout(() => {
+      rankShareStatusEl.textContent = "";
+      rankShareStatusEl.classList.remove("is-error");
+    }, 2000);
+  }
+
   function showRankSummaryStatus(message, isError = false) {
     if (!rankSummaryStatusEl) return;
     if (summaryStatusTimer) window.clearTimeout(summaryStatusTimer);
@@ -205,19 +215,9 @@ export function init({ root }) {
     const sideData = getActiveSideData();
     const jobCounts = sideData.map((entry) => entry.jobIds.length);
     const pairCount = Math.max(0, ...jobCounts);
-    if (pairCount === 0) {
-      rankStatusEl.textContent = "Paste job IDs to start ranking.";
-      return;
-    }
     const mode = getEffectiveMode(sideData.map((entry) => entry.jobIds));
     const modeLabel = mode === "grid" ? "Grid" : "Individual";
-    const mismatch = jobCounts.some((count) => count !== jobCounts[0])
-      ? "Counts differ; unmatched jobs will show as missing."
-      : "";
-    const countLabel = sideData
-      .map((entry) => `${entry.side}: ${entry.jobIds.length} job(s)`)
-      .join(" | ");
-    rankStatusEl.textContent = `${countLabel} | Mode: ${modeLabel}. ${mismatch}`.trim();
+    rankStatusEl.textContent = `Rounds: ${pairCount} | Mode: ${modeLabel}`;
   }
 
   function updateRankProgress() {
@@ -313,6 +313,50 @@ export function init({ root }) {
     } catch (error) {
       showRankSummaryStatus("Copy failed. Summary in console.", true);
       console.info("Ranking summary:\n", text);
+    }
+  }
+
+  function getBaseUrl() {
+    const href = window.location.href.split("?")[0];
+    if (window.location.origin && window.location.origin !== "null") {
+      return `${window.location.origin}${window.location.pathname}`;
+    }
+    return href;
+  }
+
+  function buildRankShareUrl() {
+    const state = getRankState();
+    const params = new URLSearchParams();
+
+    params.set("tool", "rank");
+    if (state.jobsA) params.set("a", state.jobsA.trim());
+    if (state.jobsB) params.set("b", state.jobsB.trim());
+    if (state.columnCount === "3" && state.jobsC) {
+      params.set("c", state.jobsC.trim());
+    }
+    if (state.labelA) params.set("la", state.labelA.trim());
+    if (state.labelB) params.set("lb", state.labelB.trim());
+    if (state.columnCount === "3" && state.labelC) {
+      params.set("lc", state.labelC.trim());
+    }
+    params.set("cols", state.columnCount || "2");
+    params.set("vm", state.viewMode);
+    params.set("zl", state.zoomLevel);
+    params.set("zs", state.zoomSize);
+    params.set("zk", state.zoomRequiresShift ? "1" : "0");
+
+    return `${getBaseUrl()}?${params.toString()}`;
+  }
+
+  async function copyRankShareLink() {
+    const link = buildRankShareUrl();
+    try {
+      const ok = await copyText(link);
+      if (!ok) throw new Error("Clipboard unavailable");
+      showRankShareStatus("Share link copied.");
+    } catch (error) {
+      showRankShareStatus("Copy failed. Link in console.", true);
+      console.info("Share link:", link);
     }
   }
 
@@ -559,6 +603,12 @@ export function init({ root }) {
       event.preventDefault();
       skipRankSelection();
     }
+    if (event.key === "h" || event.key === "H") {
+      event.preventDefault();
+      zoomRequiresShift = !zoomRequiresShift;
+      zoomManager.hide();
+      scheduleRankSave();
+    }
   }
 
   function getRankState() {
@@ -573,10 +623,7 @@ export function init({ root }) {
       viewMode: rankViewModeSelect ? rankViewModeSelect.value : "auto",
       zoomLevel: rankZoomLevelSelect ? rankZoomLevelSelect.value : "3",
       zoomSize: rankZoomSizeSelect ? rankZoomSizeSelect.value : "300",
-      zoomEnabled: rankZoomEnabledInput ? rankZoomEnabledInput.checked : true,
-      zoomRequiresShift: rankZoomRequiresShiftInput
-        ? rankZoomRequiresShiftInput.checked
-        : true,
+      zoomRequiresShift,
     };
   }
 
@@ -612,14 +659,8 @@ export function init({ root }) {
     if (state.zoomSize && rankZoomSizeSelect) {
       rankZoomSizeSelect.value = state.zoomSize;
     }
-    if (typeof state.zoomEnabled === "boolean" && rankZoomEnabledInput) {
-      rankZoomEnabledInput.checked = state.zoomEnabled;
-    }
-    if (
-      typeof state.zoomRequiresShift === "boolean" &&
-      rankZoomRequiresShiftInput
-    ) {
-      rankZoomRequiresShiftInput.checked = state.zoomRequiresShift;
+    if (typeof state.zoomRequiresShift === "boolean") {
+      zoomRequiresShift = state.zoomRequiresShift;
     }
   }
 
@@ -647,6 +688,27 @@ export function init({ root }) {
     }
   }
 
+  function parseRankStateFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const keys = ["a", "b", "c", "la", "lb", "lc", "cols", "vm", "zl", "zs", "zk"];
+    const hasAny = keys.some((key) => params.has(key));
+    if (!hasAny) return null;
+
+    return {
+      jobsA: params.get("a") ?? "",
+      jobsB: params.get("b") ?? "",
+      jobsC: params.get("c") ?? "",
+      labelA: params.get("la") ?? "",
+      labelB: params.get("lb") ?? "",
+      labelC: params.get("lc") ?? "",
+      columnCount: params.get("cols") || (rankColumnCountSelect ? rankColumnCountSelect.value : "2"),
+      viewMode: params.get("vm") || (rankViewModeSelect ? rankViewModeSelect.value : "auto"),
+      zoomLevel: params.get("zl") || (rankZoomLevelSelect ? rankZoomLevelSelect.value : "3"),
+      zoomSize: params.get("zs") || (rankZoomSizeSelect ? rankZoomSizeSelect.value : "300"),
+      zoomRequiresShift: params.get("zk") !== null ? params.get("zk") !== "0" : zoomRequiresShift,
+    };
+  }
+
   function clearRankInputs() {
     if (rankLabelAInput) rankLabelAInput.value = "";
     if (rankLabelBInput) rankLabelBInput.value = "";
@@ -658,8 +720,9 @@ export function init({ root }) {
     saveRankState();
   }
 
-  const storedState = loadRankStateFromStorage();
-  applyRankState(storedState);
+  const urlState = parseRankStateFromUrl();
+  const storedState = urlState ? null : loadRankStateFromStorage();
+  applyRankState(urlState || storedState);
   updateRankColumnVisibility();
   updateRankStatus();
   resetRankSession();
@@ -699,22 +762,6 @@ export function init({ root }) {
     },
     { signal }
   );
-  rankZoomEnabledInput.addEventListener(
-    "change",
-    () => {
-      zoomManager.hide();
-      scheduleRankSave();
-    },
-    { signal }
-  );
-  rankZoomRequiresShiftInput.addEventListener(
-    "change",
-    () => {
-      zoomManager.hide();
-      scheduleRankSave();
-    },
-    { signal }
-  );
   rankZoomLevelSelect.addEventListener(
     "change",
     () => {
@@ -740,6 +787,9 @@ export function init({ root }) {
     document.addEventListener("click", handleShortcutsOutside, { signal });
   }
 
+  if (rankShareBtn) {
+    rankShareBtn.addEventListener("click", copyRankShareLink, { signal });
+  }
   if (rankCopyBtn) {
     rankCopyBtn.addEventListener("click", copyRankSummary, { signal });
   }
@@ -755,11 +805,13 @@ export function init({ root }) {
 
   updateRankSummary();
   updateRankStartButton();
+  if (urlState) scheduleRankSave();
 
   return {
     destroy: () => {
       controller.abort();
       if (selectionStatusTimer) window.clearTimeout(selectionStatusTimer);
+      if (shareStatusTimer) window.clearTimeout(shareStatusTimer);
       if (summaryStatusTimer) window.clearTimeout(summaryStatusTimer);
       if (saveTimer) window.clearTimeout(saveTimer);
       zoomManager.destroy();
