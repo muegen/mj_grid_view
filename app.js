@@ -25,6 +25,31 @@ const favoritesBody = document.getElementById("favoritesBody");
 const favoritesEmptyEl = document.getElementById("favoritesEmpty");
 const favoritesCopyBtn = document.getElementById("favoritesCopyBtn");
 const favoritesStatusEl = document.getElementById("favoritesStatus");
+const toolCards = Array.from(document.querySelectorAll("[data-tool-target]"));
+const toolSections = Array.from(document.querySelectorAll(".tool-section"));
+const rankViewModeSelect = document.getElementById("rankViewMode");
+const rankColumnCountSelect = document.getElementById("rankColumnCount");
+const rankZoomLevelSelect = document.getElementById("rankZoomLevel");
+const rankZoomSizeSelect = document.getElementById("rankZoomSize");
+const rankZoomEnabledInput = document.getElementById("rankZoomEnabled");
+const rankZoomRequiresShiftInput = document.getElementById("rankZoomRequiresShift");
+const rankLabelAInput = document.getElementById("rankLabelA");
+const rankLabelBInput = document.getElementById("rankLabelB");
+const rankLabelCInput = document.getElementById("rankLabelC");
+const rankJobsAInput = document.getElementById("rankJobsA");
+const rankJobsBInput = document.getElementById("rankJobsB");
+const rankJobsCInput = document.getElementById("rankJobsC");
+const rankStatusEl = document.getElementById("rankStatus");
+const rankComparisonsEl = document.getElementById("rankComparisons");
+const rankStartBtn = document.getElementById("rankStartBtn");
+const rankClearBtn = document.getElementById("rankClearBtn");
+const rankProgressEl = document.getElementById("rankProgress");
+const rankSelectionStatusEl = document.getElementById("rankSelectionStatus");
+const rankSummaryBody = document.getElementById("rankSummaryBody");
+const rankSummaryEmptyEl = document.getElementById("rankSummaryEmpty");
+const rankCopyBtn = document.getElementById("rankCopyBtn");
+const rankSummaryStatusEl = document.getElementById("rankSummaryStatus");
+const rankInputCardC = document.getElementById("rankInputCardC");
 
 const IMAGE_COUNT = 4;
 const pairRegistry = new Map();
@@ -35,6 +60,42 @@ const SIDE_CONFIG = {
   B: { labelInput: labelBInput, jobsInput: jobsBInput },
   C: { labelInput: labelCInput, jobsInput: jobsCInput },
 };
+const RANK_SIDE_CONFIG = {
+  A: { labelInput: rankLabelAInput, jobsInput: rankJobsAInput },
+  B: { labelInput: rankLabelBInput, jobsInput: rankJobsBInput },
+  C: { labelInput: rankLabelCInput, jobsInput: rankJobsCInput },
+};
+const TOOL_IDS = ["compare", "rank"];
+const ZOOM_CONFIGS = {
+  compare: {
+    zoomLevelSelect,
+    zoomSizeSelect,
+    zoomEnabledInput,
+    zoomRequiresShiftInput,
+  },
+  rank: {
+    zoomLevelSelect: rankZoomLevelSelect,
+    zoomSizeSelect: rankZoomSizeSelect,
+    zoomEnabledInput: rankZoomEnabledInput,
+    zoomRequiresShiftInput: rankZoomRequiresShiftInput,
+  },
+};
+const toolRegistry = {
+  compare: {
+    activate: () => {
+      updateStatus();
+      refreshPairCards();
+      updateFavoritesSummary();
+    },
+  },
+  rank: {
+    activate: () => {
+      updateRankStatus();
+      updateRankSummary();
+      renderRankRound();
+    },
+  },
+};
 let zoomPreview = null;
 let lastHover = null;
 let pairCards = [];
@@ -43,6 +104,15 @@ let shareStatusTimer = null;
 let saveTimer = null;
 let renderTimer = null;
 let favoritesStatusTimer = null;
+let activeToolId = "compare";
+let rankPairRegistry = new Map();
+let rankSelections = new Map();
+let rankOrder = [];
+let rankOrderIndex = -1;
+let rankDisplayOrder = [];
+let rankSelectionStatusTimer = null;
+let rankSummaryStatusTimer = null;
+let rankSaveTimer = null;
 
 const PLACEHOLDER_MESSAGES = {
   missing: "Missing job",
@@ -76,39 +146,90 @@ function parseJobIds(raw) {
     .filter(Boolean);
 }
 
-function getSelectedColumnCount() {
-  if (!columnCountSelect) return 2;
-  const value = Number.parseInt(columnCountSelect.value, 10);
+function getSelectedColumnCountFrom(selectEl) {
+  if (!selectEl) return 2;
+  const value = Number.parseInt(selectEl.value, 10);
   return value === 3 ? 3 : 2;
 }
 
-function getActiveSides() {
-  return getSelectedColumnCount() === 3 ? ["A", "B", "C"] : ["A", "B"];
+function getActiveSidesFrom(selectEl) {
+  return getSelectedColumnCountFrom(selectEl) === 3
+    ? ["A", "B", "C"]
+    : ["A", "B"];
 }
 
-function getLabelForSide(side) {
-  const input = SIDE_CONFIG[side]?.labelInput;
+function getLabelForSideFrom(sideConfig, side) {
+  const input = sideConfig[side]?.labelInput;
   if (!input) return side;
   return input.value.trim() || side;
 }
 
-function getJobIdsForSide(side) {
-  const input = SIDE_CONFIG[side]?.jobsInput;
+function getJobIdsForSideFrom(sideConfig, side) {
+  const input = sideConfig[side]?.jobsInput;
   return parseJobIds(input ? input.value : "");
 }
 
-function getActiveSideData() {
-  return getActiveSides().map((side) => ({
+function getActiveSideDataFrom(sideConfig, selectEl) {
+  return getActiveSidesFrom(selectEl).map((side) => ({
     side,
-    label: getLabelForSide(side),
-    jobIds: getJobIdsForSide(side),
+    label: getLabelForSideFrom(sideConfig, side),
+    jobIds: getJobIdsForSideFrom(sideConfig, side),
   }));
 }
 
-function getEffectiveMode(jobIdsBySide) {
-  const selected = viewModeSelect.value;
+function getEffectiveModeFor(selectEl, jobIdsBySide) {
+  if (!selectEl) return "grid";
+  const selected = selectEl.value;
   if (selected !== "auto") return selected;
   return jobIdsBySide.some((ids) => ids.length <= 1) ? "individual" : "grid";
+}
+
+function getSelectedColumnCount() {
+  return getSelectedColumnCountFrom(columnCountSelect);
+}
+
+function getActiveSides() {
+  return getActiveSidesFrom(columnCountSelect);
+}
+
+function getLabelForSide(side) {
+  return getLabelForSideFrom(SIDE_CONFIG, side);
+}
+
+function getJobIdsForSide(side) {
+  return getJobIdsForSideFrom(SIDE_CONFIG, side);
+}
+
+function getActiveSideData() {
+  return getActiveSideDataFrom(SIDE_CONFIG, columnCountSelect);
+}
+
+function getEffectiveMode(jobIdsBySide) {
+  return getEffectiveModeFor(viewModeSelect, jobIdsBySide);
+}
+
+function getRankSelectedColumnCount() {
+  return getSelectedColumnCountFrom(rankColumnCountSelect);
+}
+
+function getRankActiveSides() {
+  return getActiveSidesFrom(rankColumnCountSelect);
+}
+
+function getRankLabelForSide(side) {
+  return getLabelForSideFrom(RANK_SIDE_CONFIG, side);
+}
+
+function getRankJobIdsForSide(side) {
+  return getJobIdsForSideFrom(RANK_SIDE_CONFIG, side);
+}
+
+function getRankActiveSideData() {
+  return getActiveSideDataFrom(RANK_SIDE_CONFIG, rankColumnCountSelect);
+}
+
+function getRankEffectiveMode(jobIdsBySide) {
+  return getEffectiveModeFor(rankViewModeSelect, jobIdsBySide);
 }
 
 function createElement(tag, className, text) {
@@ -122,16 +243,56 @@ function createPlaceholder(message) {
   return createElement("div", "placeholder", message);
 }
 
+function normalizeToolId(toolId) {
+  return TOOL_IDS.includes(toolId) ? toolId : "compare";
+}
+
+function getToolFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return normalizeToolId(params.get("tool"));
+}
+
+function updateToolInUrl(toolId) {
+  const nextTool = normalizeToolId(toolId);
+  const params = new URLSearchParams(window.location.search);
+  params.set("tool", nextTool);
+  const href = `${getBaseUrl()}?${params.toString()}`;
+  window.history.replaceState({}, "", href);
+}
+
+function getActiveSidesForTool() {
+  return activeToolId === "rank" ? getRankActiveSides() : getActiveSides();
+}
+
+function getActivePairRegistry() {
+  return activeToolId === "rank" ? rankPairRegistry : pairRegistry;
+}
+
+function getActiveZoomConfig() {
+  return ZOOM_CONFIGS[activeToolId] || ZOOM_CONFIGS.compare;
+}
+
+function getRankOptionLabel(side) {
+  const index = rankDisplayOrder.indexOf(side);
+  if (index < 0) return "Option";
+  return `Option ${index + 1}`;
+}
+
+function getActiveSideLabel(side) {
+  if (activeToolId === "rank") return getRankOptionLabel(side);
+  return getLabelForSide(side);
+}
+
 function getFavoriteKey(pairId, side) {
   if (!pairId || !side) return null;
   return `${pairId}::${side}`;
 }
 
-function buildLabelJobTotals() {
+function buildLabelJobTotalsFrom(sideConfig) {
   const totals = new Map();
-  Object.keys(SIDE_CONFIG).forEach((side) => {
-    const label = getLabelForSide(side);
-    const jobIds = getJobIdsForSide(side);
+  Object.keys(sideConfig).forEach((side) => {
+    const label = getLabelForSideFrom(sideConfig, side);
+    const jobIds = getJobIdsForSideFrom(sideConfig, side);
     if (!totals.has(label)) {
       totals.set(label, new Set());
     }
@@ -139,6 +300,10 @@ function buildLabelJobTotals() {
     jobIds.forEach((jobId) => group.add(jobId));
   });
   return totals;
+}
+
+function buildLabelJobTotals() {
+  return buildLabelJobTotalsFrom(SIDE_CONFIG);
 }
 
 function buildFavoriteGroups() {
@@ -178,7 +343,6 @@ function updateFavoritesSummary() {
   groups.forEach((group) => {
     const row = document.createElement("tr");
     row.appendChild(createElement("td", null, group.label));
-    // row.appendChild(createElement("td", null, `${group.totalCount}`)); // Don't need group count
     row.appendChild(createElement("td", null, `${group.count}`));
     favoritesBody.appendChild(row);
   });
@@ -233,6 +397,100 @@ async function copyFavoritesSummary() {
   } catch (error) {
     showFavoritesStatus("Copy failed. Favorites in console.", true);
     console.info("Favorites:\n", text);
+  }
+}
+
+function buildRankSummaryGroups() {
+  const totals = buildLabelJobTotalsFrom(RANK_SIDE_CONFIG);
+  const groups = new Map();
+  rankSelections.forEach((entry) => {
+    const label = getRankLabelForSide(entry.side);
+    if (!groups.has(label)) {
+      groups.set(label, { label, count: 0, jobIds: new Set() });
+    }
+    const group = groups.get(label);
+    group.count += 1;
+    if (entry.jobId) group.jobIds.add(entry.jobId);
+  });
+  return Array.from(groups.values()).map((group) => ({
+    label: group.label,
+    count: group.count,
+    totalCount: totals.get(group.label)?.size ?? 0,
+    jobIds: Array.from(group.jobIds),
+  }));
+}
+
+function updateRankSummary() {
+  if (!rankSummaryBody || !rankSummaryEmptyEl || !rankCopyBtn) return;
+  rankSummaryBody.innerHTML = "";
+
+  const groups = buildRankSummaryGroups().sort((a, b) =>
+    a.label.localeCompare(b.label)
+  );
+  const hasSelections = groups.length > 0;
+
+  rankSummaryEmptyEl.hidden = hasSelections;
+  rankCopyBtn.disabled = !hasSelections;
+
+  if (!hasSelections) return;
+
+  groups.forEach((group) => {
+    const row = document.createElement("tr");
+    row.appendChild(createElement("td", null, group.label));
+    row.appendChild(createElement("td", null, `${group.count}`));
+    rankSummaryBody.appendChild(row);
+  });
+}
+
+function showRankSummaryStatus(message, isError = false) {
+  if (!rankSummaryStatusEl) return;
+  if (rankSummaryStatusTimer) window.clearTimeout(rankSummaryStatusTimer);
+  rankSummaryStatusEl.textContent = message;
+  rankSummaryStatusEl.classList.toggle("is-error", Boolean(isError));
+  rankSummaryStatusTimer = window.setTimeout(() => {
+    rankSummaryStatusEl.textContent = "";
+    rankSummaryStatusEl.classList.remove("is-error");
+  }, 2000);
+}
+
+function buildRankCopyText() {
+  const groups = buildRankSummaryGroups().sort((a, b) =>
+    a.label.localeCompare(b.label)
+  );
+  if (!groups.length) return "";
+  const header = groups.map((group) => group.label).join("\t");
+  const maxRows = Math.max(
+    ...groups.map((group) => group.jobIds.length),
+    0
+  );
+  const lines = [header];
+  for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+    const row = groups.map((group) => group.jobIds[rowIndex] ?? "");
+    lines.push(row.join("\t"));
+  }
+  return lines.join("\n");
+}
+
+async function copyRankSummary() {
+  const text = buildRankCopyText();
+  if (!text) {
+    showRankSummaryStatus("No selections to copy.", true);
+    return;
+  }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      showRankSummaryStatus("Summary copied.");
+      return;
+    }
+    if (fallbackCopyText(text)) {
+      showRankSummaryStatus("Summary copied.");
+      return;
+    }
+    throw new Error("Clipboard unavailable");
+  } catch (error) {
+    showRankSummaryStatus("Copy failed. Summary in console.", true);
+    console.info("Ranking summary:\n", text);
   }
 }
 
@@ -294,12 +552,12 @@ function clearFavorites() {
   updateFavoritesSummary();
 }
 
-function registerPairImage(pairId, side, data) {
+function registerPairImage(pairId, side, data, registry = pairRegistry) {
   if (!pairId || !side) return;
-  if (!pairRegistry.has(pairId)) {
-    pairRegistry.set(pairId, {});
+  if (!registry.has(pairId)) {
+    registry.set(pairId, {});
   }
-  const entry = pairRegistry.get(pairId);
+  const entry = registry.get(pairId);
   entry[side] = data;
 }
 
@@ -321,8 +579,20 @@ function createZoomPreview() {
   return preview;
 }
 
+function updateZoomPreviewOrder() {
+  if (!zoomPreview) return;
+  const order =
+    activeToolId === "rank" && rankDisplayOrder.length
+      ? rankDisplayOrder
+      : ["A", "B", "C"];
+  order.forEach((side) => {
+    const pane = zoomPaneMap[side]?.container;
+    if (pane) zoomPreview.appendChild(pane);
+  });
+}
+
 function updateZoomPreviewVisibility() {
-  const activeSides = new Set(getActiveSides());
+  const activeSides = new Set(getActiveSidesForTool());
   Object.entries(zoomPaneMap).forEach(([side, pane]) => {
     if (!pane || !pane.container) return;
     pane.container.classList.toggle("is-hidden", !activeSides.has(side));
@@ -339,16 +609,39 @@ function updateColumnVisibility() {
   updateZoomPreviewVisibility();
 }
 
-function createImageFrame({ url, altText, pairId, side, jobId }) {
+function updateRankColumnVisibility() {
+  const showThird = getRankSelectedColumnCount() === 3;
+  if (rankInputCardC) {
+    rankInputCardC.classList.toggle("is-hidden", !showThird);
+    rankInputCardC.hidden = !showThird;
+    rankInputCardC.setAttribute("aria-hidden", (!showThird).toString());
+  }
+  updateZoomPreviewVisibility();
+}
+
+function createImageFrame({
+  url,
+  altText,
+  pairId,
+  side,
+  jobId,
+  registry = pairRegistry,
+  linkEnabled = true,
+}) {
   const frame = createElement("div", "image-frame");
   if (!url) {
-    registerPairImage(pairId, side, {
-      img: null,
-      url: "",
-      jobId,
-      status: "missing",
-      outline: null,
-    });
+    registerPairImage(
+      pairId,
+      side,
+      {
+        img: null,
+        url: "",
+        jobId,
+        status: "missing",
+        outline: null,
+      },
+      registry
+    );
     frame.appendChild(createPlaceholder(PLACEHOLDER_MESSAGES.missing));
     return frame;
   }
@@ -363,28 +656,36 @@ function createImageFrame({ url, altText, pairId, side, jobId }) {
   img.dataset.side = side;
   img.dataset.jobId = jobId;
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noreferrer";
-  link.appendChild(img);
-
   const wrapper = createElement("div", "image-wrap");
   const outline = createElement("div", "zoom-outline");
-  wrapper.appendChild(link);
+  if (linkEnabled) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.appendChild(img);
+    wrapper.appendChild(link);
+  } else {
+    wrapper.appendChild(img);
+  }
   wrapper.appendChild(outline);
 
-  registerPairImage(pairId, side, {
-    img,
-    url,
-    jobId,
-    status: "ok",
-    outline,
-  });
+  registerPairImage(
+    pairId,
+    side,
+    {
+      img,
+      url,
+      jobId,
+      status: "ok",
+      outline,
+    },
+    registry
+  );
 
   img.addEventListener("error", () => {
     img.dataset.loadError = "true";
-    const entry = pairRegistry.get(pairId);
+    const entry = registry.get(pairId);
     if (entry && entry[side]) {
       entry[side].status = "error";
       if (entry[side].outline) {
@@ -438,6 +739,68 @@ function applyState(state) {
   }
 }
 
+function getRankState() {
+  return {
+    columnCount: rankColumnCountSelect ? rankColumnCountSelect.value : "2",
+    labelA: rankLabelAInput ? rankLabelAInput.value : "",
+    labelB: rankLabelBInput ? rankLabelBInput.value : "",
+    labelC: rankLabelCInput ? rankLabelCInput.value : "",
+    jobsA: rankJobsAInput ? rankJobsAInput.value : "",
+    jobsB: rankJobsBInput ? rankJobsBInput.value : "",
+    jobsC: rankJobsCInput ? rankJobsCInput.value : "",
+    viewMode: rankViewModeSelect ? rankViewModeSelect.value : "auto",
+    zoomLevel: rankZoomLevelSelect ? rankZoomLevelSelect.value : "3",
+    zoomSize: rankZoomSizeSelect ? rankZoomSizeSelect.value : "300",
+    zoomEnabled: rankZoomEnabledInput ? rankZoomEnabledInput.checked : true,
+    zoomRequiresShift: rankZoomRequiresShiftInput
+      ? rankZoomRequiresShiftInput.checked
+      : true,
+  };
+}
+
+function applyRankState(state) {
+  if (!state) return;
+  if (state.columnCount && rankColumnCountSelect) {
+    rankColumnCountSelect.value = state.columnCount;
+  }
+  if (rankLabelAInput && state.labelA !== undefined) {
+    rankLabelAInput.value = state.labelA;
+  }
+  if (rankLabelBInput && state.labelB !== undefined) {
+    rankLabelBInput.value = state.labelB;
+  }
+  if (rankLabelCInput && state.labelC !== undefined) {
+    rankLabelCInput.value = state.labelC;
+  }
+  if (rankJobsAInput && state.jobsA !== undefined) {
+    rankJobsAInput.value = state.jobsA;
+  }
+  if (rankJobsBInput && state.jobsB !== undefined) {
+    rankJobsBInput.value = state.jobsB;
+  }
+  if (rankJobsCInput && state.jobsC !== undefined) {
+    rankJobsCInput.value = state.jobsC;
+  }
+  if (state.viewMode && rankViewModeSelect) {
+    rankViewModeSelect.value = state.viewMode;
+  }
+  if (state.zoomLevel && rankZoomLevelSelect) {
+    rankZoomLevelSelect.value = state.zoomLevel;
+  }
+  if (state.zoomSize && rankZoomSizeSelect) {
+    rankZoomSizeSelect.value = state.zoomSize;
+  }
+  if (typeof state.zoomEnabled === "boolean" && rankZoomEnabledInput) {
+    rankZoomEnabledInput.checked = state.zoomEnabled;
+  }
+  if (
+    typeof state.zoomRequiresShift === "boolean" &&
+    rankZoomRequiresShiftInput
+  ) {
+    rankZoomRequiresShiftInput.checked = state.zoomRequiresShift;
+  }
+}
+
 function saveState() {
   try {
     const state = getState();
@@ -452,6 +815,20 @@ function scheduleSave() {
   saveTimer = window.setTimeout(saveState, 200);
 }
 
+function saveRankState() {
+  try {
+    const state = getRankState();
+    localStorage.setItem("mj-grid-rank-state", JSON.stringify(state));
+  } catch (error) {
+    // Ignore storage failures (private mode, disabled, etc).
+  }
+}
+
+function scheduleRankSave() {
+  if (rankSaveTimer) window.clearTimeout(rankSaveTimer);
+  rankSaveTimer = window.setTimeout(saveRankState, 200);
+}
+
 function scheduleRender() {
   if (renderTimer) window.clearTimeout(renderTimer);
   renderTimer = window.setTimeout(renderComparisons, 200);
@@ -460,6 +837,16 @@ function scheduleRender() {
 function loadStateFromStorage() {
   try {
     const raw = localStorage.getItem("mj-grid-compare-state");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+}
+
+function loadRankStateFromStorage() {
+  try {
+    const raw = localStorage.getItem("mj-grid-rank-state");
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (error) {
@@ -507,6 +894,7 @@ function buildShareUrl() {
   const state = getState();
   const params = new URLSearchParams();
 
+  params.set("tool", "compare");
   if (state.jobsA) params.set("a", state.jobsA.trim());
   if (state.jobsB) params.set("b", state.jobsB.trim());
   if (state.columnCount === "3" && state.jobsC) {
@@ -595,6 +983,48 @@ function updateStatus() {
     .join(" | ");
 
   statusEl.textContent = `${countLabel} | Mode: ${modeLabel}. ${mismatch}`.trim();
+}
+
+function showRankSelectionStatus(message, isError = false) {
+  if (!rankSelectionStatusEl) return;
+  if (rankSelectionStatusTimer) window.clearTimeout(rankSelectionStatusTimer);
+  rankSelectionStatusEl.textContent = message;
+  rankSelectionStatusEl.classList.toggle("is-error", Boolean(isError));
+  rankSelectionStatusTimer = window.setTimeout(() => {
+    rankSelectionStatusEl.textContent = "";
+    rankSelectionStatusEl.classList.remove("is-error");
+  }, 2000);
+}
+
+function updateRankStatus() {
+  if (!rankStatusEl) return;
+  const sideData = getRankActiveSideData();
+  const jobCounts = sideData.map((entry) => entry.jobIds.length);
+  const pairCount = Math.max(0, ...jobCounts);
+  if (pairCount === 0) {
+    rankStatusEl.textContent = "Paste job IDs to start ranking.";
+    return;
+  }
+  const mode = getRankEffectiveMode(sideData.map((entry) => entry.jobIds));
+  const modeLabel = mode === "grid" ? "Grid" : "Individual";
+  const mismatch = jobCounts.some((count) => count !== jobCounts[0])
+    ? "Counts differ; unmatched jobs will show as missing."
+    : "";
+  const countLabel = sideData
+    .map((entry) => `${entry.side}: ${entry.jobIds.length} job(s)`)
+    .join(" | ");
+  rankStatusEl.textContent = `${countLabel} | Mode: ${modeLabel}. ${mismatch}`.trim();
+}
+
+function updateRankProgress() {
+  if (!rankProgressEl) return;
+  const totalRounds = rankOrder.length || getRankPairCount();
+  if (!totalRounds || rankOrderIndex < 0) {
+    rankProgressEl.textContent = `Round 0 of ${totalRounds}`;
+    return;
+  }
+  const current = Math.min(rankOrderIndex + 1, totalRounds);
+  rankProgressEl.textContent = `Round ${current} of ${totalRounds}`;
 }
 
 function isEditableTarget(target) {
@@ -690,7 +1120,10 @@ function toggleZoomSize() {
   zoomSizeSelect.selectedIndex = nextIndex;
   scheduleSave();
   if (zoomPreview) {
-    zoomPreview.style.setProperty("--zoom-pane-size", `${getZoomSize()}px`);
+    zoomPreview.style.setProperty(
+      "--zoom-pane-size",
+      `${getZoomSizeFrom(zoomSizeSelect)}px`
+    );
   }
   if (!lastHover) return;
   showZoomForImage(
@@ -723,6 +1156,7 @@ function toggleViewMode() {
 
 function handlePairNavigationKey(event) {
   if (isEditableTarget(event.target)) return;
+  if (activeToolId !== "compare") return;
   if (event.key === "k" || event.key === "K") {
     event.preventDefault();
     setActivePair(currentPairIndex + 1);
@@ -757,19 +1191,33 @@ function handlePairNavigationKey(event) {
   }
 }
 
-function getZoomLevel() {
-  const value = Number.parseFloat(zoomLevelSelect.value);
+function getZoomLevelFrom(selectEl) {
+  const value = Number.parseFloat(selectEl?.value ?? "");
   return Number.isFinite(value) ? value : 3;
 }
 
-function getZoomSize() {
-  const value = Number.parseFloat(zoomSizeSelect.value);
+function getZoomSizeFrom(selectEl) {
+  const value = Number.parseFloat(selectEl?.value ?? "");
   return Number.isFinite(value) ? value : 200;
 }
 
+function getActiveZoomLevel() {
+  const { zoomLevelSelect: selectEl } = getActiveZoomConfig();
+  return getZoomLevelFrom(selectEl);
+}
+
+function getActiveZoomSize() {
+  const { zoomSizeSelect: selectEl } = getActiveZoomConfig();
+  return getZoomSizeFrom(selectEl);
+}
+
 function shouldZoom(shiftKey) {
-  if (!zoomEnabledInput.checked) return false;
-  if (zoomRequiresShiftInput.checked && !shiftKey) return false;
+  const {
+    zoomEnabledInput: enabledInput,
+    zoomRequiresShiftInput: shiftInput,
+  } = getActiveZoomConfig();
+  if (!enabledInput?.checked) return false;
+  if (shiftInput?.checked && !shiftKey) return false;
   return true;
 }
 
@@ -796,7 +1244,7 @@ function updateZoomOutline(data, xRatio, yRatio, zoomLevel) {
     return;
   }
 
-  const paneSize = getZoomSize();
+  const paneSize = getActiveZoomSize();
   const rawSize = paneSize / zoomLevel;
   const boxWidth = Math.min(rawSize, width);
   const boxHeight = Math.min(rawSize, height);
@@ -816,8 +1264,8 @@ function updateZoomOutline(data, xRatio, yRatio, zoomLevel) {
   setOutlineVisibility(data, true);
 }
 
-function hideAllOutlines() {
-  pairRegistry.forEach((pair) => {
+function hideAllOutlines(registry = getActivePairRegistry()) {
+  registry.forEach((pair) => {
     if (!pair) return;
     Object.values(pair).forEach((data) => {
       setOutlineVisibility(data, false);
@@ -829,7 +1277,7 @@ function updateZoomPane(side, data, xRatio, yRatio, zoomLevel) {
   const pane = zoomPaneMap[side];
   if (!pane) return;
 
-  pane.label.textContent = getLabelForSide(side);
+  pane.label.textContent = getActiveSideLabel(side);
 
   if (!data || !data.img || data.img.dataset.loadError === "true") {
     const message =
@@ -870,7 +1318,7 @@ function positionZoomPreview(clientY, pair, hoveredImg) {
   let centerX = window.innerWidth / 2;
 
   if (pair) {
-    const rects = getActiveSides()
+    const rects = getActiveSidesForTool()
       .map((side) => pair[side]?.img?.getBoundingClientRect())
       .filter(Boolean);
     if (rects.length) {
@@ -904,7 +1352,7 @@ function showZoomForImage(img, clientX, clientY, shiftKey) {
     return;
   }
 
-  const pair = pairRegistry.get(img.dataset.pairId);
+  const pair = getActivePairRegistry().get(img.dataset.pairId);
   if (!pair) {
     hideZoomPreview();
     return;
@@ -918,9 +1366,9 @@ function showZoomForImage(img, clientX, clientY, shiftKey) {
 
   const xRatio = (clientX - rect.left) / rect.width;
   const yRatio = (clientY - rect.top) / rect.height;
-  const zoomLevel = getZoomLevel();
+  const zoomLevel = getActiveZoomLevel();
 
-  getActiveSides().forEach((side) => {
+  getActiveSidesForTool().forEach((side) => {
     const data = pair[side];
     updateZoomPane(side, data, xRatio, yRatio, zoomLevel);
     updateZoomOutline(data, xRatio, yRatio, zoomLevel);
@@ -939,7 +1387,13 @@ function hideZoomPreview() {
 function handleZoomMove(event) {
   const target = event.target instanceof Element ? event.target : null;
   const img = target ? target.closest("img") : null;
-  if (!img || !comparisonsEl.contains(img)) {
+  const container = event.currentTarget instanceof Element ? event.currentTarget : null;
+  if (
+    !img ||
+    !container ||
+    !container.contains(img) ||
+    container.dataset.tool !== activeToolId
+  ) {
     lastHover = null;
     hideZoomPreview();
     return;
@@ -954,7 +1408,12 @@ function handleZoomMove(event) {
   showZoomForImage(img, event.clientX, event.clientY, event.shiftKey);
 }
 
-function handleZoomLeave() {
+function handleZoomLeave(event) {
+  const container =
+    event?.currentTarget instanceof Element ? event.currentTarget : null;
+  if (container && container.dataset.tool && container.dataset.tool !== activeToolId) {
+    return;
+  }
   lastHover = null;
   hideZoomPreview();
 }
@@ -1095,6 +1554,335 @@ function buildIndividualUrl(jobId, index) {
     : "";
 }
 
+function shuffleArray(items) {
+  const array = Array.from(items);
+  for (let i = array.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function getRankPairCount() {
+  const sideData = getRankActiveSideData();
+  const jobCounts = sideData.map((entry) => entry.jobIds.length);
+  return Math.max(0, ...jobCounts);
+}
+
+function updateRankStartButton() {
+  if (!rankStartBtn) return;
+  const pairCount = getRankPairCount();
+  rankStartBtn.disabled = pairCount === 0;
+  rankStartBtn.textContent =
+    rankOrder.length > 0 ? "Restart ranking" : "Start ranking";
+}
+
+function resetRankSession({ keepOrder = false } = {}) {
+  rankSelections.clear();
+  rankPairRegistry.clear();
+  rankDisplayOrder = [];
+  rankOrderIndex = -1;
+  if (!keepOrder) rankOrder = [];
+  if (rankComparisonsEl) {
+    rankComparisonsEl.innerHTML = "";
+  }
+  hideZoomPreview();
+  updateRankSummary();
+  updateRankProgress();
+  updateRankStatus();
+  updateRankStartButton();
+  renderRankRound();
+  updateZoomPreviewOrder();
+  updateZoomPreviewVisibility();
+}
+
+function startRankSession() {
+  const pairCount = getRankPairCount();
+  rankSelections.clear();
+  rankPairRegistry.clear();
+  rankDisplayOrder = [];
+  rankOrder = buildRankOrder(pairCount);
+  rankOrderIndex = pairCount ? 0 : -1;
+  renderRankRound();
+  updateRankSummary();
+  updateRankProgress();
+  updateRankStatus();
+  updateRankStartButton();
+}
+
+function buildRankOrder(pairCount) {
+  return shuffleArray(Array.from({ length: pairCount }, (_, i) => i));
+}
+
+function createRankOptionCard({ jobId, imageUrl, pairId, side }) {
+  const card = createElement("div", "side-card rank-option");
+  card.dataset.side = side;
+  card.dataset.jobId = jobId || "";
+  card.appendChild(
+    createElement("div", "rank-option-label", getRankOptionLabel(side))
+  );
+  card.appendChild(
+    createImageFrame({
+      url: imageUrl,
+      altText: "Rank option",
+      pairId,
+      side,
+      jobId,
+      registry: rankPairRegistry,
+      linkEnabled: false,
+    })
+  );
+  card.classList.toggle("is-missing", !jobId);
+  return card;
+}
+
+function createRankImageCell({ index, jobId, pairId, side }) {
+  const cell = createElement("div", "side-card rank-option");
+  cell.dataset.side = side;
+  cell.dataset.jobId = jobId || "";
+  cell.appendChild(
+    createElement("div", "rank-option-label", getRankOptionLabel(side))
+  );
+  cell.appendChild(
+    createImageFrame({
+      url: buildIndividualUrl(jobId, index),
+      altText: "Rank option image",
+      pairId,
+      side,
+      jobId,
+      registry: rankPairRegistry,
+      linkEnabled: false,
+    })
+  );
+  cell.classList.toggle("is-missing", !jobId);
+  return cell;
+}
+
+function renderRankGridPair(sideData, pairIndex) {
+  const grid = createElement("div", "pair-grid rank-grid");
+  const pairId = `rank-pair-${pairIndex}`;
+  rankDisplayOrder.forEach((side) => {
+    const entry = sideData.find((item) => item.side === side);
+    const jobId = entry?.jobIds[pairIndex] || "";
+    grid.appendChild(
+      createRankOptionCard({
+        jobId,
+        imageUrl: buildGridUrl(jobId),
+        pairId,
+        side,
+      })
+    );
+  });
+  return grid;
+}
+
+function renderRankIndividualPair(sideData, pairIndex) {
+  const container = createElement("div", "image-rows rank-rows");
+  for (let index = 0; index < IMAGE_COUNT; index += 1) {
+    const row = createElement("div", "image-row");
+    const rowPairId = `rank-pair-${pairIndex}-img-${index}`;
+    rankDisplayOrder.forEach((side) => {
+      const entry = sideData.find((item) => item.side === side);
+      const jobId = entry?.jobIds[pairIndex] || "";
+      row.appendChild(
+        createRankImageCell({
+          index,
+          jobId,
+          pairId: rowPairId,
+          side,
+        })
+      );
+    });
+    container.appendChild(row);
+  }
+  return container;
+}
+
+function renderRankRound() {
+  if (!rankComparisonsEl) return;
+  rankComparisonsEl.innerHTML = "";
+  rankPairRegistry.clear();
+  hideZoomPreview();
+
+  const sideData = getRankActiveSideData();
+  const pairCount = Math.max(0, ...sideData.map((entry) => entry.jobIds.length));
+
+  if (pairCount === 0) {
+    rankComparisonsEl.appendChild(
+      createPlaceholder("Paste job IDs to start ranking.")
+    );
+    updateRankProgress();
+    updateRankStartButton();
+    return;
+  }
+
+  if (!rankOrder.length) {
+    rankComparisonsEl.appendChild(
+      createPlaceholder("Press Start ranking to begin.")
+    );
+    updateRankProgress();
+    updateRankStartButton();
+    return;
+  }
+
+  if (rankOrderIndex < 0 || rankOrderIndex >= rankOrder.length) {
+    rankComparisonsEl.appendChild(
+      createElement(
+        "div",
+        "rank-complete",
+        "Ranking complete. Review the summary to export."
+      )
+    );
+    updateRankProgress();
+    updateRankStartButton();
+    return;
+  }
+
+  const pairIndex = rankOrder[rankOrderIndex];
+  const mode = getRankEffectiveMode(sideData.map((entry) => entry.jobIds));
+  rankDisplayOrder = shuffleArray(getRankActiveSides());
+  updateZoomPreviewOrder();
+  updateZoomPreviewVisibility();
+
+  const card = createElement("div", "comparison-card rank-card");
+  const header = createElement("div", "comparison-header");
+  header.appendChild(
+    createElement(
+      "div",
+      "pair-title",
+      `Round ${rankOrderIndex + 1} of ${rankOrder.length}`
+    )
+  );
+  header.appendChild(
+    createElement(
+      "div",
+      "pair-meta",
+      `Mode: ${mode === "grid" ? "Grid" : "Individual images"}`
+    )
+  );
+  card.appendChild(header);
+
+  if (mode === "grid") {
+    card.appendChild(renderRankGridPair(sideData, pairIndex));
+  } else {
+    card.appendChild(renderRankIndividualPair(sideData, pairIndex));
+  }
+
+  rankComparisonsEl.appendChild(card);
+  updateRankProgress();
+  updateRankStartButton();
+}
+
+function getRankJobIdForSide(pairIndex, side) {
+  const entry = getRankActiveSideData().find((item) => item.side === side);
+  return entry?.jobIds[pairIndex] || "";
+}
+
+function selectRankOption(side) {
+  if (!rankOrder.length || rankOrderIndex < 0) return;
+  if (rankOrderIndex >= rankOrder.length) return;
+  const pairIndex = rankOrder[rankOrderIndex];
+  const jobId = getRankJobIdForSide(pairIndex, side);
+  if (!jobId) {
+    showRankSelectionStatus("Missing job for that option.", true);
+    return;
+  }
+  rankSelections.set(pairIndex, { side, jobId });
+  updateRankSummary();
+  rankOrderIndex += 1;
+  renderRankRound();
+  showRankSelectionStatus("Selection saved.");
+}
+
+function handleRankSelectionClick(event) {
+  if (activeToolId !== "rank") return;
+  const card = event.target.closest(".rank-option");
+  if (!card || !rankComparisonsEl?.contains(card)) return;
+  if (event.target.closest("a")) return;
+  const side = card.dataset.side;
+  if (!side) return;
+  selectRankOption(side);
+}
+
+function skipRankSelection() {
+  if (!rankOrder.length || rankOrderIndex < 0) return;
+  if (rankOrderIndex >= rankOrder.length) return;
+  rankOrderIndex += 1;
+  renderRankRound();
+  showRankSelectionStatus("Skipped.");
+}
+
+function handleRankShortcutKey(event) {
+  if (activeToolId !== "rank") return;
+  if (isEditableTarget(event.target)) return;
+  const indexMap = { "1": 0, "2": 1, "3": 2 };
+  if (event.key in indexMap) {
+    const side = rankDisplayOrder[indexMap[event.key]];
+    if (side) {
+      event.preventDefault();
+      selectRankOption(side);
+    }
+  }
+  if (event.key === "4") {
+    event.preventDefault();
+    skipRankSelection();
+  }
+}
+
+function clearRankInputs() {
+  if (rankLabelAInput) rankLabelAInput.value = "";
+  if (rankLabelBInput) rankLabelBInput.value = "";
+  if (rankLabelCInput) rankLabelCInput.value = "";
+  if (rankJobsAInput) rankJobsAInput.value = "";
+  if (rankJobsBInput) rankJobsBInput.value = "";
+  if (rankJobsCInput) rankJobsCInput.value = "";
+  resetRankSession();
+  saveRankState();
+}
+
+function updateToolVisibility(nextTool) {
+  toolSections.forEach((section) => {
+    const isActive = section.dataset.tool === nextTool;
+    section.classList.toggle("is-active", isActive);
+    section.hidden = !isActive;
+    section.setAttribute("aria-hidden", (!isActive).toString());
+  });
+
+  toolCards.forEach((card) => {
+    const isActive = card.dataset.toolTarget === nextTool;
+    card.classList.toggle("is-active", isActive);
+    card.setAttribute("aria-selected", isActive.toString());
+  });
+}
+
+function syncToolZoom() {
+  updateZoomPreviewOrder();
+  updateZoomPreviewVisibility();
+  if (zoomPreview) {
+    zoomPreview.style.setProperty(
+      "--zoom-pane-size",
+      `${getActiveZoomSize()}px`
+    );
+  }
+}
+
+function setActiveTool(toolId, { updateUrl = true } = {}) {
+  const nextTool = normalizeToolId(toolId);
+  activeToolId = nextTool;
+  updateToolVisibility(nextTool);
+  document.body.dataset.tool = nextTool;
+  if (updateUrl) updateToolInUrl(nextTool);
+
+  lastHover = null;
+  hideZoomPreview();
+  hideAllOutlines(pairRegistry);
+  hideAllOutlines(rankPairRegistry);
+  syncToolZoom();
+
+  const handler = toolRegistry[nextTool]?.activate;
+  if (handler) handler();
+}
+
 function clearInputs() {
   labelAInput.value = "";
   labelBInput.value = "";
@@ -1115,18 +1903,31 @@ function init() {
   const urlState = parseStateFromUrl();
   const storedState = urlState ? null : loadStateFromStorage();
   applyState(urlState || storedState);
+  applyRankState(loadRankStateFromStorage());
   updateColumnVisibility();
+  updateRankColumnVisibility();
   updateStatus();
+  resetRankSession();
 
   zoomPreview = createZoomPreview();
-  zoomPreview.style.setProperty("--zoom-pane-size", `${getZoomSize()}px`);
   document.body.appendChild(zoomPreview);
+  updateZoomPreviewOrder();
   updateZoomPreviewVisibility();
 
   const handleInputChange = () => {
     scheduleRender();
     scheduleSave();
   };
+  const handleRankInputChange = () => {
+    scheduleRankSave();
+    resetRankSession();
+  };
+
+  toolCards.forEach((card) => {
+    card.addEventListener("click", () => {
+      setActiveTool(card.dataset.toolTarget);
+    });
+  });
 
   renderBtn.addEventListener("click", () => {
     renderComparisons();
@@ -1136,6 +1937,18 @@ function init() {
   if (shareBtn) shareBtn.addEventListener("click", copyShareLink);
   if (favoritesCopyBtn) {
     favoritesCopyBtn.addEventListener("click", copyFavoritesSummary);
+  }
+  if (rankCopyBtn) {
+    rankCopyBtn.addEventListener("click", copyRankSummary);
+  }
+  if (rankStartBtn) {
+    rankStartBtn.addEventListener("click", () => {
+      startRankSession();
+      saveRankState();
+    });
+  }
+  if (rankClearBtn) {
+    rankClearBtn.addEventListener("click", clearRankInputs);
   }
   if (toTopBtn) {
     toTopBtn.addEventListener("click", () => {
@@ -1160,12 +1973,28 @@ function init() {
   labelAInput.addEventListener("input", handleInputChange);
   labelBInput.addEventListener("input", handleInputChange);
   if (labelCInput) labelCInput.addEventListener("input", handleInputChange);
+  if (rankViewModeSelect) {
+    rankViewModeSelect.addEventListener("change", handleRankInputChange);
+  }
+  if (rankJobsAInput) rankJobsAInput.addEventListener("input", handleRankInputChange);
+  if (rankJobsBInput) rankJobsBInput.addEventListener("input", handleRankInputChange);
+  if (rankJobsCInput) rankJobsCInput.addEventListener("input", handleRankInputChange);
+  if (rankLabelAInput) rankLabelAInput.addEventListener("input", handleRankInputChange);
+  if (rankLabelBInput) rankLabelBInput.addEventListener("input", handleRankInputChange);
+  if (rankLabelCInput) rankLabelCInput.addEventListener("input", handleRankInputChange);
   if (columnCountSelect) {
     columnCountSelect.addEventListener("change", () => {
       hideZoomPreview();
       updateColumnVisibility();
       scheduleRender();
       scheduleSave();
+    });
+  }
+  if (rankColumnCountSelect) {
+    rankColumnCountSelect.addEventListener("change", () => {
+      hideZoomPreview();
+      updateRankColumnVisibility();
+      handleRankInputChange();
     });
   }
   zoomEnabledInput.addEventListener("change", () => {
@@ -1176,12 +2005,30 @@ function init() {
     hideZoomPreview();
     scheduleSave();
   });
+  if (rankZoomEnabledInput) {
+    rankZoomEnabledInput.addEventListener("change", () => {
+      if (activeToolId === "rank") hideZoomPreview();
+      scheduleRankSave();
+    });
+  }
+  if (rankZoomRequiresShiftInput) {
+    rankZoomRequiresShiftInput.addEventListener("change", () => {
+      if (activeToolId === "rank") hideZoomPreview();
+      scheduleRankSave();
+    });
+  }
 
   comparisonsEl.addEventListener("mousemove", handleZoomMove);
   comparisonsEl.addEventListener("mouseleave", handleZoomLeave);
+  if (rankComparisonsEl) {
+    rankComparisonsEl.addEventListener("mousemove", handleZoomMove);
+    rankComparisonsEl.addEventListener("mouseleave", handleZoomLeave);
+    rankComparisonsEl.addEventListener("click", handleRankSelectionClick);
+  }
   document.addEventListener("keydown", handleZoomKeyChange);
   document.addEventListener("keyup", handleZoomKeyChange);
   document.addEventListener("keydown", handlePairNavigationKey);
+  document.addEventListener("keydown", handleRankShortcutKey);
 
   zoomLevelSelect.addEventListener("change", () => {
     scheduleSave();
@@ -1196,7 +2043,10 @@ function init() {
   zoomSizeSelect.addEventListener("change", () => {
     scheduleSave();
     if (!zoomPreview) return;
-    zoomPreview.style.setProperty("--zoom-pane-size", `${getZoomSize()}px`);
+    zoomPreview.style.setProperty(
+      "--zoom-pane-size",
+      `${getZoomSizeFrom(zoomSizeSelect)}px`
+    );
     if (!lastHover) return;
     showZoomForImage(
       lastHover.img,
@@ -1205,6 +2055,35 @@ function init() {
       lastHover.shiftKey
     );
   });
+  if (rankZoomLevelSelect) {
+    rankZoomLevelSelect.addEventListener("change", () => {
+      scheduleRankSave();
+      if (!lastHover || activeToolId !== "rank") return;
+      showZoomForImage(
+        lastHover.img,
+        lastHover.clientX,
+        lastHover.clientY,
+        lastHover.shiftKey
+      );
+    });
+  }
+  if (rankZoomSizeSelect) {
+    rankZoomSizeSelect.addEventListener("change", () => {
+      scheduleRankSave();
+      if (!zoomPreview) return;
+      zoomPreview.style.setProperty(
+        "--zoom-pane-size",
+        `${getZoomSizeFrom(rankZoomSizeSelect)}px`
+      );
+      if (!lastHover || activeToolId !== "rank") return;
+      showZoomForImage(
+        lastHover.img,
+        lastHover.clientX,
+        lastHover.clientY,
+        lastHover.shiftKey
+      );
+    });
+  }
 
   if (jobsAInput.value.trim() || jobsBInput.value.trim()) {
     renderComparisons();
@@ -1212,6 +2091,9 @@ function init() {
     refreshPairCards();
   }
   updateFavoritesSummary();
+  updateRankSummary();
+  updateRankStartButton();
+  setActiveTool(getToolFromUrl(), { updateUrl: false });
   if (urlState) saveState();
 }
 

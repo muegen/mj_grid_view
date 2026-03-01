@@ -47,7 +47,48 @@ img {
   max-width: 780px;
 }
 
-.controls {
+.tool-hub {
+  margin-top: 20px;
+}
+
+.tool-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.tool-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-card:hover {
+  border-color: var(--accent);
+}
+
+.tool-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px rgba(61, 106, 255, 0.18);
+}
+
+.tool-card-title {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.tool-card-meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.controls,
+.rank-controls {
   margin-top: 24px;
   padding: 16px;
   background: var(--card);
@@ -254,6 +295,7 @@ button:focus-visible {
   gap: 6px;
 }
 
+
 .nav-row {
   margin-top: 12px;
   display: flex;
@@ -309,6 +351,36 @@ button:focus-visible {
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow);
+}
+
+.rank-summary {
+  margin-top: 24px;
+}
+
+.rank-summary-card {
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.rank-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rank-summary-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.rank-summary-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .favorites-header {
@@ -428,6 +500,10 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.rank-card {
+  border-style: dashed;
+}
+
 .comparison-card.is-active {
   border-color: var(--accent);
   box-shadow: 0 12px 28px rgba(61, 106, 255, 0.18);
@@ -458,11 +534,38 @@ button:focus-visible {
   gap: 16px;
 }
 
+
 .side-card {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 12px;
   background: #fafbff;
+}
+
+.rank-option {
+  cursor: pointer;
+}
+
+.rank-option.is-missing {
+  opacity: 0.6;
+}
+
+.rank-option-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rank-complete {
+  padding: 24px;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--card);
 }
 
 .side-card.is-favorite {
@@ -625,7 +728,8 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .controls {
+  .controls,
+  .rank-controls {
     padding: 10px;
   }
 
