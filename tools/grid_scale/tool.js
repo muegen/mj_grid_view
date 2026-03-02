@@ -54,6 +54,7 @@ export function init({ root }) {
   let previewPanel = null;
   let previewInner = null;
   let previewOpen = false;
+  let lastScaleLayout = null;
   let parseTimer = null;
   let saveTimer = null;
   let shareStatusTimer = null;
@@ -365,6 +366,7 @@ export function init({ root }) {
     gridEl.innerHTML = "";
     pairRegistry.clear();
     zoomManager.hide();
+    lastScaleLayout = null;
 
     if (message) {
       gridEl.appendChild(createPlaceholder(message));
@@ -542,6 +544,7 @@ export function init({ root }) {
       sampledY,
       duplicates,
     });
+    lastScaleLayout = { xParam, yParam, sampledX, sampledY };
     refreshScalePreview();
   }
 
@@ -627,6 +630,35 @@ export function init({ root }) {
     const content = gridEl?.firstElementChild;
     if (!content) return;
     const clone = content.cloneNode(true);
+    if (clone.classList.contains("scale-grid") && lastScaleLayout) {
+      const previewWidth = previewInner.clientWidth || 0;
+      const columnGap = 4;
+      const labelCandidates = [
+        `X: ${lastScaleLayout.xParam}`,
+        `Y: ${lastScaleLayout.yParam}`,
+        ...lastScaleLayout.sampledY.map((value) => String(value)),
+      ];
+      const longestLabel = labelCandidates.reduce(
+        (max, label) => Math.max(max, label.length),
+        0
+      );
+      const axisColWidth = Math.min(
+        96,
+        Math.max(24, longestLabel * 6 + 8)
+      );
+      const availableWidth = Math.max(
+        0,
+        previewWidth - axisColWidth - columnGap * lastScaleLayout.sampledX.length
+      );
+      const minCellWidth =
+        lastScaleLayout.sampledX.length > 0
+          ? Math.max(
+              48,
+              Math.floor(availableWidth / lastScaleLayout.sampledX.length)
+            )
+          : 120;
+      clone.style.gridTemplateColumns = `minmax(24px, ${axisColWidth}px) repeat(${lastScaleLayout.sampledX.length}, minmax(${minCellWidth}px, 1fr))`;
+    }
     const scale = getPreviewScale();
     clone.style.transform = `scale(${scale})`;
     clone.style.transformOrigin = "top left";
@@ -976,6 +1008,14 @@ export function init({ root }) {
   }
 
   document.addEventListener("keydown", handleShortcutKey, { signal });
+  window.addEventListener("beforeunload", saveState, { signal });
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.visibilityState === "hidden") saveState();
+    },
+    { signal }
+  );
 
   if (urlState) scheduleSave();
 
