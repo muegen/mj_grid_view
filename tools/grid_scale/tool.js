@@ -50,6 +50,10 @@ export function init({ root }) {
   let zoomRequiresShift = true;
   let preferredAxisX = "";
   let preferredAxisY = "";
+  let previewOverlay = null;
+  let previewPanel = null;
+  let previewInner = null;
+  let previewOpen = false;
   let parseTimer = null;
   let saveTimer = null;
   let shareStatusTimer = null;
@@ -419,7 +423,12 @@ export function init({ root }) {
     xValues.forEach((value, index) => {
       const record = valueMap.get(value);
       const cell = createElement("div", "scale-cell");
-      cell.appendChild(createElement("div", "scale-cell-label", value));
+      const label = createElement("div", "scale-cell-label scale-cell-label-single");
+      const key = createElement("span", "scale-cell-label-key", xParam);
+      const val = createElement("span", "scale-cell-label-value", value);
+      label.appendChild(key);
+      label.appendChild(val);
+      cell.appendChild(label);
       const jobId = record?.jobId || "";
       const imageUrl =
         viewModeSelect.value === "individual"
@@ -439,6 +448,7 @@ export function init({ root }) {
     });
 
     gridEl.appendChild(grid);
+    refreshScalePreview();
   }
 
   function renderTwoAxis(filteredRecords, xParam, yParam, xValues, yValues) {
@@ -464,9 +474,36 @@ export function init({ root }) {
     });
 
     const grid = createElement("div", "scale-grid");
-    grid.style.gridTemplateColumns = `minmax(120px, 160px) repeat(${sampledX.length}, minmax(160px, 1fr))`;
+    const containerWidth =
+      gridEl?.clientWidth || gridEl?.parentElement?.clientWidth || 0;
+    const columnGap = 6;
+    const labelCandidates = [
+      `X: ${xParam}`,
+      `Y: ${yParam}`,
+      ...sampledY.map((value) => String(value)),
+    ];
+    const longestLabel = labelCandidates.reduce(
+      (max, label) => Math.max(max, label.length),
+      0
+    );
+    const axisColWidth = Math.min(120, Math.max(36, longestLabel * 7 + 12));
+    const availableWidth = Math.max(
+      0,
+      containerWidth - axisColWidth - columnGap * sampledX.length
+    );
+    const minCellWidth =
+      sampledX.length > 0 ? Math.max(48, Math.floor(availableWidth / sampledX.length)) : 120;
 
-    grid.appendChild(createElement("div", "scale-axis scale-axis-corner", ""));
+    grid.style.gridTemplateColumns = `minmax(32px, ${axisColWidth}px) repeat(${sampledX.length}, minmax(${minCellWidth}px, 1fr))`;
+    const cellPadding = Math.max(2, Math.min(4, Math.floor(minCellWidth / 12)));
+    const framePadding = Math.max(2, cellPadding - 2);
+    grid.style.setProperty("--scale-cell-padding", `${cellPadding}px`);
+    grid.style.setProperty("--scale-frame-padding", `${framePadding}px`);
+
+    const corner = createElement("div", "scale-axis scale-axis-corner");
+    corner.appendChild(createElement("div", "scale-axis-label", `X: ${xParam}`));
+    corner.appendChild(createElement("div", "scale-axis-label", `Y: ${yParam}`));
+    grid.appendChild(corner);
     sampledX.forEach((value) => {
       grid.appendChild(createElement("div", "scale-axis scale-axis-x", value));
     });
@@ -505,6 +542,7 @@ export function init({ root }) {
       sampledY,
       duplicates,
     });
+    refreshScalePreview();
   }
 
   function updateLayoutVisibility() {
@@ -557,8 +595,64 @@ export function init({ root }) {
     scheduleSave();
   }
 
+  function getPreviewScale() {
+    const base = getZoomLevel();
+    return Math.max(1, base / 3);
+  }
+
+  function ensureScalePreview() {
+    if (previewOverlay) return;
+    previewOverlay = createElement("div", "scale-preview-overlay");
+    const backdrop = createElement("div", "scale-preview-backdrop");
+    previewPanel = createElement("div", "scale-preview-panel");
+    const header = createElement("div", "scale-preview-header");
+    header.appendChild(createElement("div", "scale-preview-title", "Scale Preview"));
+    const closeBtn = createElement("button", "secondary");
+    closeBtn.type = "button";
+    closeBtn.textContent = "Close";
+    closeBtn.addEventListener("click", () => setPreviewOpen(false));
+    header.appendChild(closeBtn);
+    previewInner = createElement("div", "scale-preview-inner");
+    previewPanel.appendChild(header);
+    previewPanel.appendChild(previewInner);
+    previewOverlay.appendChild(backdrop);
+    previewOverlay.appendChild(previewPanel);
+    document.body.appendChild(previewOverlay);
+    backdrop.addEventListener("click", () => setPreviewOpen(false));
+  }
+
+  function refreshScalePreview() {
+    if (!previewOpen || !previewInner) return;
+    previewInner.innerHTML = "";
+    const content = gridEl?.firstElementChild;
+    if (!content) return;
+    const clone = content.cloneNode(true);
+    const scale = getPreviewScale();
+    clone.style.transform = `scale(${scale})`;
+    clone.style.transformOrigin = "top left";
+    previewInner.appendChild(clone);
+  }
+
+  function setPreviewOpen(isOpen) {
+    ensureScalePreview();
+    previewOpen = isOpen;
+    if (!previewOverlay) return;
+    previewOverlay.classList.toggle("is-visible", previewOpen);
+    if (previewOpen) {
+      refreshScalePreview();
+    }
+  }
+
+  function toggleScalePreview() {
+    setPreviewOpen(!previewOpen);
+  }
+
   function handleShortcutKey(event) {
     if (isEditableTarget(event.target)) return;
+    if (event.key === "Escape" && previewOpen) {
+      event.preventDefault();
+      setPreviewOpen(false);
+    }
     if (event.key === "/" || event.key === "?") {
       event.preventDefault();
       toggleShortcuts();
@@ -578,6 +672,10 @@ export function init({ root }) {
     if (event.key === "h" || event.key === "H") {
       event.preventDefault();
       toggleZoomRequiresShift();
+    }
+    if (event.key === "p" || event.key === "P") {
+      event.preventDefault();
+      toggleScalePreview();
     }
     if (event.key >= "1" && event.key <= "4") {
       event.preventDefault();
@@ -861,6 +959,7 @@ export function init({ root }) {
       if (parseTimer) window.clearTimeout(parseTimer);
       if (saveTimer) window.clearTimeout(saveTimer);
       if (shareStatusTimer) window.clearTimeout(shareStatusTimer);
+      if (previewOverlay) previewOverlay.remove();
       zoomManager.destroy();
     },
   };
