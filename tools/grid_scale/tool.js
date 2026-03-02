@@ -755,7 +755,7 @@ export function init({ root }) {
 
   function parseStateFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const keys = ["x", "y", "vm", "ii", "rl", "gd", "zl", "zs", "zk", "f"];
+    const keys = ["x", "y", "vm", "ii", "rl", "gd", "zl", "zs", "zk", "f", "d"];
     const hasAny = keys.some((key) => params.has(key));
     if (!hasAny) return null;
     let filters = {};
@@ -765,6 +765,7 @@ export function init({ root }) {
       filters = {};
     }
     return {
+      rawInput: decodeShareData(params.get("d")),
       xParam: params.get("x") ?? "",
       yParam: params.get("y") ?? "",
       viewMode: params.get("vm") ?? "grid",
@@ -784,6 +785,23 @@ export function init({ root }) {
       return `${window.location.origin}${window.location.pathname}`;
     }
     return href;
+  }
+
+  function encodeShareData(raw) {
+    try {
+      return btoa(unescape(encodeURIComponent(raw)));
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function decodeShareData(raw) {
+    if (!raw) return "";
+    try {
+      return decodeURIComponent(escape(atob(raw)));
+    } catch (error) {
+      return "";
+    }
   }
 
   function buildShareUrl() {
@@ -806,6 +824,10 @@ export function init({ root }) {
     if (Object.keys(filters).length) {
       params.set("f", JSON.stringify(filters));
     }
+    if (state.rawInput) {
+      const encoded = encodeShareData(state.rawInput);
+      if (encoded) params.set("d", encoded);
+    }
     return `${getBaseUrl()}?${params.toString()}`;
   }
 
@@ -814,7 +836,11 @@ export function init({ root }) {
     try {
       const ok = await copyText(link);
       if (!ok) throw new Error("Clipboard unavailable");
-      showShareStatus("Share link copied.");
+      if (link.length > 4000) {
+        showShareStatus("Share link copied (large).");
+      } else {
+        showShareStatus("Share link copied.");
+      }
     } catch (error) {
       showShareStatus("Copy failed. Link in console.", true);
       console.info("Share link:", link);
