@@ -27,9 +27,13 @@ export function init({ root }) {
   const labelAInput = root.querySelector("#labelA");
   const labelBInput = root.querySelector("#labelB");
   const labelCInput = root.querySelector("#labelC");
+  const labelDInput = root.querySelector("#labelD");
+  const labelEInput = root.querySelector("#labelE");
   const jobsAInput = root.querySelector("#jobsA");
   const jobsBInput = root.querySelector("#jobsB");
   const jobsCInput = root.querySelector("#jobsC");
+  const jobsDInput = root.querySelector("#jobsD");
+  const jobsEInput = root.querySelector("#jobsE");
   const statusEl = root.querySelector("#status");
   const comparisonsEl = root.querySelector("#comparisons");
   const zoomLevelSelect = root.querySelector("#zoomLevel");
@@ -38,6 +42,8 @@ export function init({ root }) {
   const pairIndicatorEl = root.querySelector("#pairIndicator");
   const shareStatusEl = root.querySelector("#shareStatus");
   const inputCardC = root.querySelector("#inputCardC");
+  const inputCardD = root.querySelector("#inputCardD");
+  const inputCardE = root.querySelector("#inputCardE");
   const favoritesBody = root.querySelector("#favoritesBody");
   const favoritesEmptyEl = root.querySelector("#favoritesEmpty");
   const favoritesCopyBtn = root.querySelector("#favoritesCopyBtn");
@@ -48,10 +54,13 @@ export function init({ root }) {
   const pairRegistry = new Map();
   const favoritesMap = new Map();
   const zoomManager = createZoomManager();
+  const ALL_SIDES = ["A", "B", "C", "D", "E"];
   const SIDE_CONFIG = {
     A: { labelInput: labelAInput, jobsInput: jobsAInput },
     B: { labelInput: labelBInput, jobsInput: jobsBInput },
     C: { labelInput: labelCInput, jobsInput: jobsCInput },
+    D: { labelInput: labelDInput, jobsInput: jobsDInput },
+    E: { labelInput: labelEInput, jobsInput: jobsEInput },
   };
 
   let lastHoverImg = null;
@@ -96,11 +105,12 @@ export function init({ root }) {
   function getSelectedColumnCount() {
     if (!columnCountSelect) return 2;
     const value = Number.parseInt(columnCountSelect.value, 10);
-    return value === 3 ? 3 : 2;
+    if (!Number.isFinite(value)) return 2;
+    return Math.min(Math.max(value, 2), 5);
   }
 
   function getActiveSides() {
-    return getSelectedColumnCount() === 3 ? ["A", "B", "C"] : ["A", "B"];
+    return ALL_SIDES.slice(0, getSelectedColumnCount());
   }
 
   function getLabelForSide(side) {
@@ -144,13 +154,31 @@ export function init({ root }) {
   }
 
   function updateColumnVisibility() {
-    const showThird = getSelectedColumnCount() === 3;
+    const selectedCount = getSelectedColumnCount();
+    const showThird = selectedCount >= 3;
+    const showFourth = selectedCount >= 4;
+    const showFifth = selectedCount >= 5;
     if (inputCardC) {
       inputCardC.classList.toggle("is-hidden", !showThird);
       inputCardC.hidden = !showThird;
       inputCardC.setAttribute("aria-hidden", (!showThird).toString());
     }
+    if (inputCardD) {
+      inputCardD.classList.toggle("is-hidden", !showFourth);
+      inputCardD.hidden = !showFourth;
+      inputCardD.setAttribute("aria-hidden", (!showFourth).toString());
+    }
+    if (inputCardE) {
+      inputCardE.classList.toggle("is-hidden", !showFifth);
+      inputCardE.hidden = !showFifth;
+      inputCardE.setAttribute("aria-hidden", (!showFifth).toString());
+    }
     zoomManager.updateVisibility();
+    setPageColumnCount();
+  }
+
+  function setPageColumnCount() {
+    document.body.dataset.columns = String(getSelectedColumnCount());
   }
 
   function getFavoriteKey(pairId, side) {
@@ -160,7 +188,7 @@ export function init({ root }) {
 
   function buildLabelJobTotals() {
     const totals = new Map();
-    Object.keys(SIDE_CONFIG).forEach((side) => {
+    getActiveSides().forEach((side) => {
       const label = getLabelForSide(side);
       const jobIds = getJobIdsForSide(side);
       if (!totals.has(label)) {
@@ -176,6 +204,7 @@ export function init({ root }) {
     const totals = buildLabelJobTotals();
     const groups = new Map();
     favoritesMap.forEach((entry) => {
+      if (!getActiveSides().includes(entry.side)) return;
       const label = getLabelForSide(entry.side);
       if (!groups.has(label)) {
         groups.set(label, { label, count: 0, jobIds: new Set() });
@@ -483,17 +512,30 @@ export function init({ root }) {
   function buildShareUrl() {
     const state = getState();
     const params = new URLSearchParams();
+    const columnCount = Number.parseInt(state.columnCount, 10) || 2;
 
     params.set("tool", "compare");
     if (state.jobsA) params.set("a", state.jobsA.trim());
     if (state.jobsB) params.set("b", state.jobsB.trim());
-    if (state.columnCount === "3" && state.jobsC) {
+    if (columnCount >= 3 && state.jobsC) {
       params.set("c", state.jobsC.trim());
+    }
+    if (columnCount >= 4 && state.jobsD) {
+      params.set("d", state.jobsD.trim());
+    }
+    if (columnCount >= 5 && state.jobsE) {
+      params.set("e", state.jobsE.trim());
     }
     if (state.labelA) params.set("la", state.labelA.trim());
     if (state.labelB) params.set("lb", state.labelB.trim());
-    if (state.columnCount === "3" && state.labelC) {
+    if (columnCount >= 3 && state.labelC) {
       params.set("lc", state.labelC.trim());
+    }
+    if (columnCount >= 4 && state.labelD) {
+      params.set("ld", state.labelD.trim());
+    }
+    if (columnCount >= 5 && state.labelE) {
+      params.set("le", state.labelE.trim());
     }
     params.set("cols", state.columnCount || "2");
     params.set("vm", state.viewMode);
@@ -649,9 +691,13 @@ export function init({ root }) {
       labelA: labelAInput.value,
       labelB: labelBInput.value,
       labelC: labelCInput ? labelCInput.value : "",
+      labelD: labelDInput ? labelDInput.value : "",
+      labelE: labelEInput ? labelEInput.value : "",
       jobsA: jobsAInput.value,
       jobsB: jobsBInput.value,
       jobsC: jobsCInput ? jobsCInput.value : "",
+      jobsD: jobsDInput ? jobsDInput.value : "",
+      jobsE: jobsEInput ? jobsEInput.value : "",
       viewMode: viewModeSelect.value,
       zoomLevel: zoomLevelSelect.value,
       zoomSize: zoomSizeSelect.value,
@@ -667,9 +713,13 @@ export function init({ root }) {
     if (state.labelA !== undefined) labelAInput.value = state.labelA;
     if (state.labelB !== undefined) labelBInput.value = state.labelB;
     if (state.labelC !== undefined && labelCInput) labelCInput.value = state.labelC;
+    if (state.labelD !== undefined && labelDInput) labelDInput.value = state.labelD;
+    if (state.labelE !== undefined && labelEInput) labelEInput.value = state.labelE;
     if (state.jobsA !== undefined) jobsAInput.value = state.jobsA;
     if (state.jobsB !== undefined) jobsBInput.value = state.jobsB;
     if (state.jobsC !== undefined && jobsCInput) jobsCInput.value = state.jobsC;
+    if (state.jobsD !== undefined && jobsDInput) jobsDInput.value = state.jobsD;
+    if (state.jobsE !== undefined && jobsEInput) jobsEInput.value = state.jobsE;
     if (state.viewMode) viewModeSelect.value = state.viewMode;
     if (state.zoomLevel) zoomLevelSelect.value = state.zoomLevel;
     if (state.zoomSize) zoomSizeSelect.value = state.zoomSize;
@@ -713,9 +763,13 @@ export function init({ root }) {
       "a",
       "b",
       "c",
+      "d",
+      "e",
       "la",
       "lb",
       "lc",
+      "ld",
+      "le",
       "cols",
       "vm",
       "zl",
@@ -729,9 +783,13 @@ export function init({ root }) {
       jobsA: params.get("a") ?? "",
       jobsB: params.get("b") ?? "",
       jobsC: params.get("c") ?? "",
+      jobsD: params.get("d") ?? "",
+      jobsE: params.get("e") ?? "",
       labelA: params.get("la") ?? "",
       labelB: params.get("lb") ?? "",
       labelC: params.get("lc") ?? "",
+      labelD: params.get("ld") ?? "",
+      labelE: params.get("le") ?? "",
       columnCount: params.get("cols") || (columnCountSelect ? columnCountSelect.value : "2"),
       viewMode: params.get("vm") || viewModeSelect.value,
       zoomLevel: params.get("zl") || zoomLevelSelect.value,
@@ -755,9 +813,13 @@ export function init({ root }) {
     labelAInput.value = "";
     labelBInput.value = "";
     if (labelCInput) labelCInput.value = "";
+    if (labelDInput) labelDInput.value = "";
+    if (labelEInput) labelEInput.value = "";
     jobsAInput.value = "";
     jobsBInput.value = "";
     if (jobsCInput) jobsCInput.value = "";
+    if (jobsDInput) jobsDInput.value = "";
+    if (jobsEInput) jobsEInput.value = "";
     comparisonsEl.innerHTML = "";
     pairRegistry.clear();
     zoomManager.hide();
@@ -791,6 +853,7 @@ export function init({ root }) {
     shouldZoom,
     getRegistry: () => pairRegistry,
     getDisplayOrder: () => getActiveSides(),
+    getAllSides: () => ALL_SIDES,
   });
   zoomManager.attach(comparisonsEl);
   zoomManager.updatePaneSize();
@@ -819,9 +882,13 @@ export function init({ root }) {
   jobsAInput.addEventListener("input", handleInputChange, { signal });
   jobsBInput.addEventListener("input", handleInputChange, { signal });
   if (jobsCInput) jobsCInput.addEventListener("input", handleInputChange, { signal });
+  if (jobsDInput) jobsDInput.addEventListener("input", handleInputChange, { signal });
+  if (jobsEInput) jobsEInput.addEventListener("input", handleInputChange, { signal });
   labelAInput.addEventListener("input", handleInputChange, { signal });
   labelBInput.addEventListener("input", handleInputChange, { signal });
   if (labelCInput) labelCInput.addEventListener("input", handleInputChange, { signal });
+  if (labelDInput) labelDInput.addEventListener("input", handleInputChange, { signal });
+  if (labelEInput) labelEInput.addEventListener("input", handleInputChange, { signal });
   if (columnCountSelect) {
     columnCountSelect.addEventListener(
       "change",

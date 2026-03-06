@@ -22,9 +22,13 @@ export function init({ root }) {
   const rankLabelAInput = root.querySelector("#rankLabelA");
   const rankLabelBInput = root.querySelector("#rankLabelB");
   const rankLabelCInput = root.querySelector("#rankLabelC");
+  const rankLabelDInput = root.querySelector("#rankLabelD");
+  const rankLabelEInput = root.querySelector("#rankLabelE");
   const rankJobsAInput = root.querySelector("#rankJobsA");
   const rankJobsBInput = root.querySelector("#rankJobsB");
   const rankJobsCInput = root.querySelector("#rankJobsC");
+  const rankJobsDInput = root.querySelector("#rankJobsD");
+  const rankJobsEInput = root.querySelector("#rankJobsE");
   const rankStatusEl = root.querySelector("#rankStatus");
   const rankComparisonsEl = root.querySelector("#rankComparisons");
   const rankStartBtn = root.querySelector("#rankStartBtn");
@@ -37,16 +41,21 @@ export function init({ root }) {
   const rankCopyBtn = root.querySelector("#rankCopyBtn");
   const rankSummaryStatusEl = root.querySelector("#rankSummaryStatus");
   const rankInputCardC = root.querySelector("#rankInputCardC");
+  const rankInputCardD = root.querySelector("#rankInputCardD");
+  const rankInputCardE = root.querySelector("#rankInputCardE");
   const shortcutsToggle = root.querySelector("#rankShortcutsToggle");
   const shortcutsPanel = root.querySelector("#rankShortcutsPanel");
 
   const pairRegistry = new Map();
   const rankSelections = new Map();
   const zoomManager = createZoomManager();
+  const ALL_SIDES = ["A", "B", "C", "D", "E"];
   const SIDE_CONFIG = {
     A: { labelInput: rankLabelAInput, jobsInput: rankJobsAInput },
     B: { labelInput: rankLabelBInput, jobsInput: rankJobsBInput },
     C: { labelInput: rankLabelCInput, jobsInput: rankJobsCInput },
+    D: { labelInput: rankLabelDInput, jobsInput: rankJobsDInput },
+    E: { labelInput: rankLabelEInput, jobsInput: rankJobsEInput },
   };
 
   let rankOrder = [];
@@ -89,11 +98,12 @@ export function init({ root }) {
   function getSelectedColumnCount() {
     if (!rankColumnCountSelect) return 2;
     const value = Number.parseInt(rankColumnCountSelect.value, 10);
-    return value === 3 ? 3 : 2;
+    if (!Number.isFinite(value)) return 2;
+    return Math.min(Math.max(value, 2), 5);
   }
 
   function getActiveSides() {
-    return getSelectedColumnCount() === 3 ? ["A", "B", "C"] : ["A", "B"];
+    return ALL_SIDES.slice(0, getSelectedColumnCount());
   }
 
   function getLabelForSide(side) {
@@ -143,13 +153,31 @@ export function init({ root }) {
   }
 
   function updateRankColumnVisibility() {
-    const showThird = getSelectedColumnCount() === 3;
+    const selectedCount = getSelectedColumnCount();
+    const showThird = selectedCount >= 3;
+    const showFourth = selectedCount >= 4;
+    const showFifth = selectedCount >= 5;
     if (rankInputCardC) {
       rankInputCardC.classList.toggle("is-hidden", !showThird);
       rankInputCardC.hidden = !showThird;
       rankInputCardC.setAttribute("aria-hidden", (!showThird).toString());
     }
+    if (rankInputCardD) {
+      rankInputCardD.classList.toggle("is-hidden", !showFourth);
+      rankInputCardD.hidden = !showFourth;
+      rankInputCardD.setAttribute("aria-hidden", (!showFourth).toString());
+    }
+    if (rankInputCardE) {
+      rankInputCardE.classList.toggle("is-hidden", !showFifth);
+      rankInputCardE.hidden = !showFifth;
+      rankInputCardE.setAttribute("aria-hidden", (!showFifth).toString());
+    }
     zoomManager.updateVisibility();
+    setPageColumnCount();
+  }
+
+  function setPageColumnCount() {
+    document.body.dataset.columns = String(getSelectedColumnCount());
   }
 
   function shuffleArray(items) {
@@ -220,7 +248,7 @@ export function init({ root }) {
 
   function buildRankSummaryGroups() {
     const totals = new Map();
-    Object.keys(SIDE_CONFIG).forEach((side) => {
+    getActiveSides().forEach((side) => {
       const label = getLabelForSide(side);
       const jobIds = getJobIdsForSide(side);
       if (!totals.has(label)) {
@@ -231,6 +259,7 @@ export function init({ root }) {
     });
     const groups = new Map();
     rankSelections.forEach((entry) => {
+      if (!getActiveSides().includes(entry.side)) return;
       const label = getLabelForSide(entry.side);
       if (!groups.has(label)) {
         groups.set(label, { label, count: 0, jobIds: new Set() });
@@ -314,17 +343,30 @@ export function init({ root }) {
   function buildRankShareUrl() {
     const state = getRankState();
     const params = new URLSearchParams();
+    const columnCount = Number.parseInt(state.columnCount, 10) || 2;
 
     params.set("tool", "rank");
     if (state.jobsA) params.set("a", state.jobsA.trim());
     if (state.jobsB) params.set("b", state.jobsB.trim());
-    if (state.columnCount === "3" && state.jobsC) {
+    if (columnCount >= 3 && state.jobsC) {
       params.set("c", state.jobsC.trim());
+    }
+    if (columnCount >= 4 && state.jobsD) {
+      params.set("d", state.jobsD.trim());
+    }
+    if (columnCount >= 5 && state.jobsE) {
+      params.set("e", state.jobsE.trim());
     }
     if (state.labelA) params.set("la", state.labelA.trim());
     if (state.labelB) params.set("lb", state.labelB.trim());
-    if (state.columnCount === "3" && state.labelC) {
+    if (columnCount >= 3 && state.labelC) {
       params.set("lc", state.labelC.trim());
+    }
+    if (columnCount >= 4 && state.labelD) {
+      params.set("ld", state.labelD.trim());
+    }
+    if (columnCount >= 5 && state.labelE) {
+      params.set("le", state.labelE.trim());
     }
     params.set("cols", state.columnCount || "2");
     params.set("vm", state.viewMode);
@@ -582,15 +624,17 @@ export function init({ root }) {
       event.preventDefault();
       toggleShortcuts();
     }
-    const indexMap = { "1": 0, "2": 1, "3": 2 };
-    if (event.key in indexMap) {
-      const side = rankDisplayOrder[indexMap[event.key]];
+    const selectionKeys = ["1", "2", "3", "4", "5"];
+    const index = selectionKeys.indexOf(event.key);
+    if (index >= 0) {
+      const side = rankDisplayOrder[index];
       if (side) {
         event.preventDefault();
         selectRankOption(side);
       }
     }
-    if (event.key === "4") {
+    const skipKey = getActiveSides().length <= 3 ? "4" : "6";
+    if (event.key === skipKey) {
       event.preventDefault();
       skipRankSelection();
     }
@@ -608,9 +652,13 @@ export function init({ root }) {
       labelA: rankLabelAInput ? rankLabelAInput.value : "",
       labelB: rankLabelBInput ? rankLabelBInput.value : "",
       labelC: rankLabelCInput ? rankLabelCInput.value : "",
+      labelD: rankLabelDInput ? rankLabelDInput.value : "",
+      labelE: rankLabelEInput ? rankLabelEInput.value : "",
       jobsA: rankJobsAInput ? rankJobsAInput.value : "",
       jobsB: rankJobsBInput ? rankJobsBInput.value : "",
       jobsC: rankJobsCInput ? rankJobsCInput.value : "",
+      jobsD: rankJobsDInput ? rankJobsDInput.value : "",
+      jobsE: rankJobsEInput ? rankJobsEInput.value : "",
       viewMode: rankViewModeSelect ? rankViewModeSelect.value : "auto",
       zoomLevel: rankZoomLevelSelect ? rankZoomLevelSelect.value : "3",
       zoomSize: rankZoomSizeSelect ? rankZoomSizeSelect.value : "300",
@@ -632,6 +680,12 @@ export function init({ root }) {
     if (rankLabelCInput && state.labelC !== undefined) {
       rankLabelCInput.value = state.labelC;
     }
+    if (rankLabelDInput && state.labelD !== undefined) {
+      rankLabelDInput.value = state.labelD;
+    }
+    if (rankLabelEInput && state.labelE !== undefined) {
+      rankLabelEInput.value = state.labelE;
+    }
     if (rankJobsAInput && state.jobsA !== undefined) {
       rankJobsAInput.value = state.jobsA;
     }
@@ -640,6 +694,12 @@ export function init({ root }) {
     }
     if (rankJobsCInput && state.jobsC !== undefined) {
       rankJobsCInput.value = state.jobsC;
+    }
+    if (rankJobsDInput && state.jobsD !== undefined) {
+      rankJobsDInput.value = state.jobsD;
+    }
+    if (rankJobsEInput && state.jobsE !== undefined) {
+      rankJobsEInput.value = state.jobsE;
     }
     if (state.viewMode && rankViewModeSelect) {
       rankViewModeSelect.value = state.viewMode;
@@ -681,7 +741,23 @@ export function init({ root }) {
 
   function parseRankStateFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const keys = ["a", "b", "c", "la", "lb", "lc", "cols", "vm", "zl", "zs", "zk"];
+    const keys = [
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "la",
+      "lb",
+      "lc",
+      "ld",
+      "le",
+      "cols",
+      "vm",
+      "zl",
+      "zs",
+      "zk",
+    ];
     const hasAny = keys.some((key) => params.has(key));
     if (!hasAny) return null;
 
@@ -689,9 +765,13 @@ export function init({ root }) {
       jobsA: params.get("a") ?? "",
       jobsB: params.get("b") ?? "",
       jobsC: params.get("c") ?? "",
+      jobsD: params.get("d") ?? "",
+      jobsE: params.get("e") ?? "",
       labelA: params.get("la") ?? "",
       labelB: params.get("lb") ?? "",
       labelC: params.get("lc") ?? "",
+      labelD: params.get("ld") ?? "",
+      labelE: params.get("le") ?? "",
       columnCount: params.get("cols") || (rankColumnCountSelect ? rankColumnCountSelect.value : "2"),
       viewMode: params.get("vm") || (rankViewModeSelect ? rankViewModeSelect.value : "auto"),
       zoomLevel: params.get("zl") || (rankZoomLevelSelect ? rankZoomLevelSelect.value : "3"),
@@ -704,9 +784,13 @@ export function init({ root }) {
     if (rankLabelAInput) rankLabelAInput.value = "";
     if (rankLabelBInput) rankLabelBInput.value = "";
     if (rankLabelCInput) rankLabelCInput.value = "";
+    if (rankLabelDInput) rankLabelDInput.value = "";
+    if (rankLabelEInput) rankLabelEInput.value = "";
     if (rankJobsAInput) rankJobsAInput.value = "";
     if (rankJobsBInput) rankJobsBInput.value = "";
     if (rankJobsCInput) rankJobsCInput.value = "";
+    if (rankJobsDInput) rankJobsDInput.value = "";
+    if (rankJobsEInput) rankJobsEInput.value = "";
     resetRankSession();
     saveRankState();
   }
@@ -727,6 +811,7 @@ export function init({ root }) {
     getRegistry: () => pairRegistry,
     getDisplayOrder: () =>
       rankDisplayOrder.length ? rankDisplayOrder : getActiveSides(),
+    getAllSides: () => ALL_SIDES,
   });
   zoomManager.attach(rankComparisonsEl);
   zoomManager.updatePaneSize();
@@ -740,9 +825,13 @@ export function init({ root }) {
   rankJobsAInput.addEventListener("input", handleRankInputChange, { signal });
   rankJobsBInput.addEventListener("input", handleRankInputChange, { signal });
   if (rankJobsCInput) rankJobsCInput.addEventListener("input", handleRankInputChange, { signal });
+  if (rankJobsDInput) rankJobsDInput.addEventListener("input", handleRankInputChange, { signal });
+  if (rankJobsEInput) rankJobsEInput.addEventListener("input", handleRankInputChange, { signal });
   rankLabelAInput.addEventListener("input", handleRankInputChange, { signal });
   rankLabelBInput.addEventListener("input", handleRankInputChange, { signal });
   if (rankLabelCInput) rankLabelCInput.addEventListener("input", handleRankInputChange, { signal });
+  if (rankLabelDInput) rankLabelDInput.addEventListener("input", handleRankInputChange, { signal });
+  if (rankLabelEInput) rankLabelEInput.addEventListener("input", handleRankInputChange, { signal });
 
   rankColumnCountSelect.addEventListener(
     "change",

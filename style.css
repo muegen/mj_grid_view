@@ -36,6 +36,14 @@ img {
   padding: 32px 20px 60px;
 }
 
+body[data-columns="4"] .page {
+  max-width: 1600px;
+}
+
+body[data-columns="5"] .page {
+  max-width: 2000px;
+}
+
 .page-header h1 {
   margin: 0 0 8px;
   font-size: 32px;

@@ -21,6 +21,8 @@
           <select id="rankColumnCount">
             <option value="2" selected>2 columns</option>
             <option value="3">3 columns</option>
+            <option value="4">4 columns</option>
+            <option value="5">5 columns</option>
           </select>
         </label>
       </div>
@@ -100,9 +102,8 @@
         <span class="shortcut-item">Click an option to select</span>
         <span class="shortcut-item">/: shortcuts</span>
         <span class="shortcut-item">1/2: left/right, 4: skip</span>
-        <span class="shortcut-item">
-          3-column: 1/2/3 pick option, 4 skips
-        </span>
+        <span class="shortcut-item">3-column: 1/2/3 pick, 4 skips</span>
+        <span class="shortcut-item">4-5 columns: 1-5 pick, 6 skips</span>
         <span class="shortcut-item">H: shift-to-preview</span>
         <span class="shortcut-item">Selections appear in summary</span>
       </div>
@@ -206,6 +207,46 @@
         Job IDs or URLs
         <textarea
           id="rankJobsC"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+    <div class="input-card is-hidden" id="rankInputCardD" hidden>
+      <h2>Set D (Optional)</h2>
+      <label class="control">
+        Label
+        <input
+          id="rankLabelD"
+          type="text"
+          placeholder="Example: Variant D"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="rankJobsD"
+          rows="6"
+          placeholder="One per line or comma-separated"
+        ></textarea>
+      </label>
+    </div>
+    <div class="input-card is-hidden" id="rankInputCardE" hidden>
+      <h2>Set E (Optional)</h2>
+      <label class="control">
+        Label
+        <input
+          id="rankLabelE"
+          type="text"
+          placeholder="Example: Variant E"
+          autocomplete="off"
+        />
+      </label>
+      <label class="control">
+        Job IDs or URLs
+        <textarea
+          id="rankJobsE"
           rows="6"
           placeholder="One per line or comma-separated"
         ></textarea>

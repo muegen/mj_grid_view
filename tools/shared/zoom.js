@@ -8,11 +8,16 @@ export function createZoomManager() {
   let container = null;
   let keyListening = false;
 
+  function getAllSides() {
+    const sides = config?.getAllSides?.();
+    return Array.isArray(sides) && sides.length ? sides : ["A", "B", "C"];
+  }
+
   function ensurePreview() {
     if (preview) return;
     preview = createElement("div", "zoom-preview");
     paneMap = {};
-    ["A", "B", "C"].forEach((side) => {
+    getAllSides().forEach((side) => {
       const pane = createElement("div", "zoom-pane");
       const label = createElement("div", "zoom-pane-label", side);
       const image = createElement(
@@ -30,7 +35,7 @@ export function createZoomManager() {
 
   function updateOrder() {
     if (!preview) return;
-    const order = config?.getDisplayOrder?.() || ["A", "B", "C"];
+    const order = config?.getDisplayOrder?.() || getAllSides();
     order.forEach((side) => {
       const pane = paneMap[side]?.container;
       if (pane) preview.appendChild(pane);
@@ -39,7 +44,7 @@ export function createZoomManager() {
 
   function updateVisibility() {
     if (!preview || !config) return;
-    const activeSides = new Set(config.getActiveSides?.() || ["A", "B", "C"]);
+    const activeSides = new Set(config.getActiveSides?.() || getAllSides());
     Object.entries(paneMap).forEach(([side, pane]) => {
       if (!pane || !pane.container) return;
       pane.container.classList.toggle("is-hidden", !activeSides.has(side));
