@@ -19,6 +19,7 @@ export function createZoomManager() {
     paneMap = {};
     getAllSides().forEach((side) => {
       const pane = createElement("div", "zoom-pane");
+      pane.dataset.side = side;
       const label = createElement("div", "zoom-pane-label", side);
       const image = createElement(
         "div",
@@ -35,11 +36,38 @@ export function createZoomManager() {
 
   function updateOrder() {
     if (!preview) return;
-    const order = config?.getDisplayOrder?.() || getAllSides();
-    order.forEach((side) => {
+    const allSides = getAllSides();
+    const desiredOrder = config?.getDisplayOrder?.() || allSides;
+    const allowedSides = new Set(allSides);
+    const seen = new Set();
+    const finalOrder = [];
+
+    desiredOrder.forEach((side) => {
+      if (!allowedSides.has(side) || seen.has(side)) return;
+      seen.add(side);
+      finalOrder.push(side);
+    });
+
+    allSides.forEach((side) => {
+      if (seen.has(side)) return;
+      seen.add(side);
+      finalOrder.push(side);
+    });
+
+    finalOrder.forEach((side) => {
       const pane = paneMap[side]?.container;
       if (pane) preview.appendChild(pane);
     });
+
+    const actualOrder = Array.from(preview.querySelectorAll(".zoom-pane"))
+      .map((pane) => pane.dataset.side)
+      .filter(Boolean);
+    if (actualOrder.join("|") !== finalOrder.join("|")) {
+      console.warn("[zoom] Pane order mismatch.", {
+        expected: finalOrder,
+        actual: actualOrder,
+      });
+    }
   }
 
   function updateVisibility() {
