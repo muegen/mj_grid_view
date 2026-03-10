@@ -630,6 +630,8 @@ export function init({ root }) {
     const content = gridEl?.firstElementChild;
     if (!content) return;
     const clone = content.cloneNode(true);
+    const scale = getPreviewScale();
+    const targetAxisFontSize = 10;
     if (clone.classList.contains("scale-grid") && lastScaleLayout) {
       const previewWidth = previewInner.clientWidth || 0;
       const columnGap = 4;
@@ -642,9 +644,10 @@ export function init({ root }) {
         (max, label) => Math.max(max, label.length),
         0
       );
+      const labelCharWidth = Math.max(7, Math.round(targetAxisFontSize * 0.75));
       const axisColWidth = Math.min(
-        96,
-        Math.max(24, longestLabel * 6 + 8)
+        140,
+        Math.max(56, Math.round(longestLabel * labelCharWidth + 16))
       );
       const availableWidth = Math.max(
         0,
@@ -659,7 +662,11 @@ export function init({ root }) {
           : 120;
       clone.style.gridTemplateColumns = `minmax(24px, ${axisColWidth}px) repeat(${lastScaleLayout.sampledX.length}, minmax(${minCellWidth}px, 1fr))`;
     }
-    const scale = getPreviewScale();
+    const axisFontSize = targetAxisFontSize / scale;
+    clone.style.setProperty(
+      "--scale-preview-axis-font",
+      `${Math.round(axisFontSize * 10) / 10}px`
+    );
     clone.style.transform = `scale(${scale})`;
     clone.style.transformOrigin = "top left";
     previewInner.appendChild(clone);

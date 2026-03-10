@@ -705,12 +705,13 @@ button:focus-visible {
 }
 
 .scale-preview-inner .scale-axis {
-  font-size: 6px;
+  font-size: var(--scale-preview-axis-font, 6px);
   padding: 2px 3px;
 }
 
 .scale-preview-inner .scale-axis-label {
-  font-size: 6px;
+  font-size: var(--scale-preview-axis-font, 6px);
+  white-space: nowrap;
 }
 
 .scale-preview-inner .scale-cell {
