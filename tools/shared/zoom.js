@@ -86,6 +86,23 @@ export function createZoomManager() {
     preview.style.setProperty("--zoom-pane-size", `${size}px`);
   }
 
+  function getPaneDimensions(data) {
+    const paneWidth = config?.getZoomSize?.() || 200;
+    if (!data || !data.img || data.img.dataset.loadError === "true") {
+      return { paneWidth, paneHeight: paneWidth };
+    }
+    const sourceWidth = data.img.naturalWidth || data.img.clientWidth || 0;
+    const sourceHeight = data.img.naturalHeight || data.img.clientHeight || 0;
+    if (!sourceWidth || !sourceHeight) {
+      return { paneWidth, paneHeight: paneWidth };
+    }
+    const aspect = sourceHeight / sourceWidth;
+    return {
+      paneWidth,
+      paneHeight: Math.max(1, paneWidth * aspect),
+    };
+  }
+
   function setConfig(nextConfig) {
     config = nextConfig;
     ensurePreview();
@@ -127,10 +144,11 @@ export function createZoomManager() {
       return;
     }
 
-    const paneSize = config?.getZoomSize?.() || 200;
-    const rawSize = paneSize / zoomLevel;
-    const boxWidth = Math.min(rawSize, width);
-    const boxHeight = Math.min(rawSize, height);
+    const { paneWidth, paneHeight } = getPaneDimensions(data);
+    const rawWidth = paneWidth / zoomLevel;
+    const rawHeight = paneHeight / zoomLevel;
+    const boxWidth = Math.min(rawWidth, width);
+    const boxHeight = Math.min(rawHeight, height);
 
     const clampedX = Math.min(Math.max(xRatio, 0), 1);
     const clampedY = Math.min(Math.max(yRatio, 0), 1);
@@ -158,6 +176,9 @@ export function createZoomManager() {
     if (!pane) return;
 
     pane.label.textContent = config?.getSideLabel?.(side) || side;
+
+    const { paneHeight } = getPaneDimensions(data);
+    pane.image.style.height = `${paneHeight}px`;
 
     if (!data || !data.img || data.img.dataset.loadError === "true") {
       const message =
