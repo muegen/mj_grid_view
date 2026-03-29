@@ -11,6 +11,7 @@ import {
 import { copyText } from "../shared/clipboard.js";
 import { createImageFrame } from "../shared/images.js";
 import { createZoomManager } from "../shared/zoom.js";
+import { captureZoomPanel, finalizeCapture } from "../shared/zoom_capture.js";
 import { detectDelimiter, parseTable } from "../shared/table.js";
 
 const IMAGE_COUNT = 4;
@@ -31,6 +32,7 @@ export function init({ root }) {
   const zoomLevelSelect = root.querySelector("#scaleZoomLevel");
   const zoomSizeSelect = root.querySelector("#scaleZoomSize");
   const clearBtn = root.querySelector("#scaleClearBtn");
+  const captureZoomBtn = root.querySelector("#scaleCaptureZoomBtn");
   const shareBtn = root.querySelector("#scaleShareBtn");
   const statusEl = root.querySelector("#scaleStatus");
   const shareStatusEl = root.querySelector("#scaleShareStatus");
@@ -50,9 +52,12 @@ export function init({ root }) {
   let zoomRequiresShift = true;
   let preferredAxisX = "";
   let preferredAxisY = "";
+  let previewFitToPanel = false;
   let previewOverlay = null;
   let previewPanel = null;
   let previewInner = null;
+  let previewCaptureBtn = null;
+  let previewFitBtn = null;
   let previewOpen = false;
   let lastScaleLayout = null;
   let parseTimer = null;
@@ -598,6 +603,66 @@ export function init({ root }) {
     scheduleSave();
   }
 
+  function parsePixelValue(value, fallback = 0) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function buildRoundedRectPath(ctx, x, y, width, height, radius) {
+    const safeRadius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + safeRadius, y);
+    ctx.arcTo(x + width, y, x + width, y + height, safeRadius);
+    ctx.arcTo(x + width, y + height, x, y + height, safeRadius);
+    ctx.arcTo(x, y + height, x, y, safeRadius);
+    ctx.arcTo(x, y, x + width, y, safeRadius);
+    ctx.closePath();
+  }
+
+  function fillRoundedRect(ctx, x, y, width, height, radius, color) {
+    if (!color) return;
+    buildRoundedRectPath(ctx, x, y, width, height, radius);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function strokeRoundedRect(ctx, x, y, width, height, radius, color, lineWidth) {
+    if (!color || !lineWidth) return;
+    buildRoundedRectPath(ctx, x, y, width, height, radius);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+
+  function getFontString(style) {
+    const fontStyle = style.fontStyle || "normal";
+    const fontWeight = style.fontWeight || "400";
+    const fontSize = style.fontSize || "12px";
+    const fontFamily = style.fontFamily || "sans-serif";
+    return `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
+  }
+
+  function isElementVisible(element) {
+    if (!element) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    if (Number.parseFloat(style.opacity) === 0) return false;
+    return true;
+  }
+
+  function updatePreviewFitToggle() {
+    if (!previewFitBtn) return;
+    previewFitBtn.classList.toggle("is-active", previewFitToPanel);
+    previewFitBtn.setAttribute("aria-pressed", previewFitToPanel.toString());
+    previewFitBtn.textContent = previewFitToPanel ? "Fit: On" : "Fit: Off";
+  }
+
+  function togglePreviewFit() {
+    previewFitToPanel = !previewFitToPanel;
+    updatePreviewFitToggle();
+    refreshScalePreview();
+  }
+
   function getPreviewScale() {
     const base = getZoomLevel();
     return Math.max(1, base / 3);
@@ -610,11 +675,22 @@ export function init({ root }) {
     previewPanel = createElement("div", "scale-preview-panel");
     const header = createElement("div", "scale-preview-header");
     header.appendChild(createElement("div", "scale-preview-title", "Scale Preview"));
+    const actions = createElement("div", "scale-preview-actions");
+    previewFitBtn = createElement("button", "secondary");
+    previewFitBtn.type = "button";
+    previewFitBtn.addEventListener("click", togglePreviewFit);
+    updatePreviewFitToggle();
+    previewCaptureBtn = createElement("button", "secondary", "Capture");
+    previewCaptureBtn.type = "button";
+    previewCaptureBtn.addEventListener("click", () => captureScalePreviewPanel());
     const closeBtn = createElement("button", "secondary");
     closeBtn.type = "button";
     closeBtn.textContent = "Close";
     closeBtn.addEventListener("click", () => setPreviewOpen(false));
-    header.appendChild(closeBtn);
+    actions.appendChild(previewFitBtn);
+    actions.appendChild(previewCaptureBtn);
+    actions.appendChild(closeBtn);
+    header.appendChild(actions);
     previewInner = createElement("div", "scale-preview-inner");
     previewPanel.appendChild(header);
     previewPanel.appendChild(previewInner);
@@ -630,7 +706,7 @@ export function init({ root }) {
     const content = gridEl?.firstElementChild;
     if (!content) return;
     const clone = content.cloneNode(true);
-    const scale = getPreviewScale();
+    let scale = getPreviewScale();
     const targetAxisFontSize = 10;
     if (clone.classList.contains("scale-grid") && lastScaleLayout) {
       const previewWidth = previewInner.clientWidth || 0;
@@ -662,14 +738,30 @@ export function init({ root }) {
           : 120;
       clone.style.gridTemplateColumns = `minmax(24px, ${axisColWidth}px) repeat(${lastScaleLayout.sampledX.length}, minmax(${minCellWidth}px, 1fr))`;
     }
-    const axisFontSize = targetAxisFontSize / scale;
+    const axisFontSize = previewFitToPanel
+      ? targetAxisFontSize
+      : targetAxisFontSize / scale;
     clone.style.setProperty(
       "--scale-preview-axis-font",
       `${Math.round(axisFontSize * 10) / 10}px`
     );
+    previewInner.appendChild(clone);
+    if (previewFitToPanel) {
+      const availableWidth = previewInner.clientWidth || 0;
+      const availableHeight = previewInner.clientHeight || 0;
+      const naturalRect = clone.getBoundingClientRect();
+      const naturalWidth = naturalRect.width || 0;
+      const naturalHeight = naturalRect.height || 0;
+      if (availableWidth && availableHeight && naturalWidth && naturalHeight) {
+        scale = Math.min(
+          availableWidth / naturalWidth,
+          availableHeight / naturalHeight
+        );
+      }
+      if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+    }
     clone.style.transform = `scale(${scale})`;
     clone.style.transformOrigin = "top left";
-    previewInner.appendChild(clone);
   }
 
   function setPreviewOpen(isOpen) {
@@ -684,6 +776,203 @@ export function init({ root }) {
 
   function toggleScalePreview() {
     setPreviewOpen(!previewOpen);
+  }
+
+  async function captureScalePreviewPanel() {
+    if (!previewOpen || !previewPanel || !previewInner) {
+      showShareStatus("Open the scale preview first.", true);
+      return;
+    }
+
+    refreshScalePreview();
+    const panelRect = previewPanel.getBoundingClientRect();
+    if (!panelRect.width || !panelRect.height) {
+      showShareStatus("Scale preview is empty.", true);
+      return;
+    }
+
+    const content = previewInner.firstElementChild;
+    const innerRect = previewInner.getBoundingClientRect();
+    const innerStyle = window.getComputedStyle(previewInner);
+    const paddingLeft = parsePixelValue(innerStyle.paddingLeft);
+    const paddingRight = parsePixelValue(innerStyle.paddingRight);
+    const paddingTop = parsePixelValue(innerStyle.paddingTop);
+    const paddingBottom = parsePixelValue(innerStyle.paddingBottom);
+    const contentRect = content ? content.getBoundingClientRect() : innerRect;
+    const contentWidth = contentRect.width || innerRect.width;
+    const contentHeight = contentRect.height || innerRect.height;
+
+    const innerFullWidth = Math.max(
+      innerRect.width,
+      contentWidth + paddingLeft + paddingRight
+    );
+    const innerFullHeight = Math.max(
+      innerRect.height,
+      contentHeight + paddingTop + paddingBottom
+    );
+    const innerOffsetX = innerRect.left - panelRect.left;
+    const innerOffsetY = innerRect.top - panelRect.top;
+    const extraRight = panelRect.right - innerRect.right;
+    const extraBottom = panelRect.bottom - innerRect.bottom;
+    const fullWidth = Math.max(panelRect.width, innerOffsetX + innerFullWidth + extraRight);
+    const fullHeight = Math.max(panelRect.height, innerOffsetY + innerFullHeight + extraBottom);
+    const contentStartX = innerOffsetX + paddingLeft;
+    const contentStartY = innerOffsetY + paddingTop;
+
+    const scale = window.devicePixelRatio || 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(fullWidth * scale));
+    canvas.height = Math.max(1, Math.round(fullHeight * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      showShareStatus("Scale preview capture failed.", true);
+      return;
+    }
+    ctx.scale(scale, scale);
+
+    const panelStyle = window.getComputedStyle(previewPanel);
+    const panelRadius = parsePixelValue(panelStyle.borderRadius);
+    const panelBorderWidth = parsePixelValue(panelStyle.borderWidth);
+    const panelBorderColor = panelStyle.borderColor || "#000";
+    const panelBackground = panelStyle.backgroundColor || "#fff";
+    fillRoundedRect(ctx, 0, 0, fullWidth, fullHeight, panelRadius, panelBackground);
+    strokeRoundedRect(
+      ctx,
+      0,
+      0,
+      fullWidth,
+      fullHeight,
+      panelRadius,
+      panelBorderColor,
+      panelBorderWidth
+    );
+
+    const innerRadius = parsePixelValue(innerStyle.borderRadius);
+    const innerBackground = innerStyle.backgroundColor || "#f5f7fb";
+    fillRoundedRect(
+      ctx,
+      innerOffsetX,
+      innerOffsetY,
+      innerFullWidth,
+      innerFullHeight,
+      innerRadius,
+      innerBackground
+    );
+
+    const warnings = new Set();
+    const imageCache = new Map();
+    const images = Array.from(previewPanel.querySelectorAll("img"));
+    const imageEntries = images
+      .map((img) => ({
+        src: img.currentSrc || img.src,
+        rect: img.getBoundingClientRect(),
+        inPreview: previewInner.contains(img),
+      }))
+      .filter((entry) => entry.src && entry.rect.width && entry.rect.height);
+
+    const loadImage = (src) => {
+      if (imageCache.has(src)) return imageCache.get(src);
+      const promise = new Promise((resolve, reject) => {
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Image failed to load"));
+        image.src = src;
+      });
+      imageCache.set(src, promise);
+      return promise;
+    };
+
+    const resolvedImages = await Promise.all(
+      imageEntries.map(async (entry) => {
+        try {
+          const image = await loadImage(entry.src);
+          return { ...entry, image };
+        } catch (error) {
+          warnings.add("image-load");
+          return { ...entry, image: null };
+        }
+      })
+    );
+
+    resolvedImages.forEach((entry) => {
+      if (!entry.image) return;
+      const x = entry.inPreview
+        ? contentStartX + (entry.rect.left - contentRect.left)
+        : entry.rect.left - panelRect.left;
+      const y = entry.inPreview
+        ? contentStartY + (entry.rect.top - contentRect.top)
+        : entry.rect.top - panelRect.top;
+      ctx.drawImage(entry.image, x, y, entry.rect.width, entry.rect.height);
+    });
+
+    const textSelectors = [
+      ".scale-preview-title",
+      ".scale-axis",
+      ".scale-axis-label",
+      ".scale-cell-label-key",
+      ".scale-cell-label-value",
+      ".image-caption",
+      ".placeholder",
+    ];
+    const textElements = Array.from(
+      previewPanel.querySelectorAll(textSelectors.join(","))
+    ).filter((element) => element.childElementCount === 0);
+
+    textElements.forEach((element) => {
+      if (!isElementVisible(element)) return;
+      const text = (element.textContent || "").trim();
+      if (!text) return;
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const style = window.getComputedStyle(element);
+      ctx.font = getFontString(style);
+      ctx.fillStyle = style.color || "#111";
+      ctx.textBaseline = "top";
+      const inPreview = previewInner.contains(element);
+      let x = inPreview
+        ? contentStartX + (rect.left - contentRect.left)
+        : rect.left - panelRect.left;
+      let y = inPreview
+        ? contentStartY + (rect.top - contentRect.top)
+        : rect.top - panelRect.top;
+      const align = style.textAlign || "left";
+      if (align === "center") {
+        x += rect.width / 2;
+      } else if (align === "right" || align === "end") {
+        x += rect.width;
+      }
+      ctx.textAlign = align === "center" ? "center" : align === "right" || align === "end" ? "right" : "left";
+      ctx.fillText(text, x, y);
+    });
+
+    const blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/png")
+    );
+    if (!blob) {
+      showShareStatus("Capture blocked by browser. Use system snip.", true);
+      return;
+    }
+
+    await finalizeCapture({
+      blob,
+      warnings: Array.from(warnings),
+      setStatus: showShareStatus,
+      filePrefix: "scale-preview",
+      label: "Scale preview",
+    });
+  }
+
+  async function handleCapturePanel() {
+    if (previewOpen) {
+      await captureScalePreviewPanel();
+      return;
+    }
+    await captureZoomPanel({
+      zoomManager,
+      setStatus: showShareStatus,
+      filePrefix: "scale-zoom",
+    });
   }
 
   function handleShortcutKey(event) {
@@ -715,6 +1004,10 @@ export function init({ root }) {
     if (event.key === "p" || event.key === "P") {
       event.preventDefault();
       toggleScalePreview();
+    }
+    if (event.key === "c" || event.key === "C") {
+      event.preventDefault();
+      handleCaptureZoomPanel();
     }
     if (event.key >= "1" && event.key <= "4") {
       event.preventDefault();
@@ -886,6 +1179,10 @@ export function init({ root }) {
     }
   }
 
+  async function handleCaptureZoomPanel() {
+    await handleCapturePanel();
+  }
+
   function handleAxisChange() {
     preferredAxisX = axisXSelect.value;
     preferredAxisY = axisYSelect.value;
@@ -1007,6 +1304,9 @@ export function init({ root }) {
   );
 
   clearBtn.addEventListener("click", clearData, { signal });
+  if (captureZoomBtn) {
+    captureZoomBtn.addEventListener("click", handleCaptureZoomPanel, { signal });
+  }
   shareBtn.addEventListener("click", copyShareLink, { signal });
 
   if (shortcutsToggle) {

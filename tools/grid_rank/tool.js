@@ -11,6 +11,7 @@ import {
 import { copyText } from "../shared/clipboard.js";
 import { createImageFrame } from "../shared/images.js";
 import { createZoomManager } from "../shared/zoom.js";
+import { captureZoomPanel } from "../shared/zoom_capture.js";
 
 const IMAGE_COUNT = 4;
 
@@ -33,6 +34,7 @@ export function init({ root }) {
   const rankComparisonsEl = root.querySelector("#rankComparisons");
   const rankStartBtn = root.querySelector("#rankStartBtn");
   const rankClearBtn = root.querySelector("#rankClearBtn");
+  const rankCaptureZoomBtn = root.querySelector("#rankCaptureZoomBtn");
   const rankShareBtn = root.querySelector("#rankShareBtn");
   const rankProgressEl = root.querySelector("#rankProgress");
   const rankSelectionStatusEl = root.querySelector("#rankSelectionStatus");
@@ -389,6 +391,14 @@ export function init({ root }) {
     }
   }
 
+  async function handleCaptureZoomPanel() {
+    await captureZoomPanel({
+      zoomManager,
+      setStatus: showRankSelectionStatus,
+      filePrefix: "rank-zoom",
+    });
+  }
+
   function buildRankOrder(pairCount) {
     return shuffleArray(Array.from({ length: pairCount }, (_, i) => i));
   }
@@ -644,6 +654,10 @@ export function init({ root }) {
       zoomManager.hide();
       scheduleRankSave();
     }
+    if (event.key === "c" || event.key === "C") {
+      event.preventDefault();
+      handleCaptureZoomPanel();
+    }
   }
 
   function getRankState() {
@@ -869,6 +883,9 @@ export function init({ root }) {
 
   if (rankShareBtn) {
     rankShareBtn.addEventListener("click", copyRankShareLink, { signal });
+  }
+  if (rankCaptureZoomBtn) {
+    rankCaptureZoomBtn.addEventListener("click", handleCaptureZoomPanel, { signal });
   }
   if (rankCopyBtn) {
     rankCopyBtn.addEventListener("click", copyRankSummary, { signal });

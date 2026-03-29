@@ -11,6 +11,7 @@ import {
 import { copyText } from "../shared/clipboard.js";
 import { createImageFrame } from "../shared/images.js";
 import { createZoomManager } from "../shared/zoom.js";
+import { captureZoomPanel } from "../shared/zoom_capture.js";
 
 const IMAGE_COUNT = 4;
 const PLACEHOLDER_MESSAGES = {
@@ -24,6 +25,7 @@ export function init({ root }) {
   const columnCountSelect = root.querySelector("#columnCount");
   const renderBtn = root.querySelector("#renderBtn");
   const clearBtn = root.querySelector("#clearBtn");
+  const captureZoomBtn = root.querySelector("#compareCaptureZoomBtn");
   const labelAInput = root.querySelector("#labelA");
   const labelBInput = root.querySelector("#labelB");
   const labelCInput = root.querySelector("#labelC");
@@ -507,6 +509,10 @@ export function init({ root }) {
       event.preventDefault();
       toggleFavoriteForHover();
     }
+    if (event.key === "c" || event.key === "C") {
+      event.preventDefault();
+      handleCaptureZoomPanel();
+    }
   }
 
   function buildShareUrl() {
@@ -567,6 +573,14 @@ export function init({ root }) {
       showShareStatus("Copy failed. Link in console.", true);
       console.info("Share link:", link);
     }
+  }
+
+  async function handleCaptureZoomPanel() {
+    await captureZoomPanel({
+      zoomManager,
+      setStatus: showShareStatus,
+      filePrefix: "compare-zoom",
+    });
   }
 
   function createSideCard(label, jobId, imageUrl, pairId, side) {
@@ -872,6 +886,9 @@ export function init({ root }) {
     { signal }
   );
   clearBtn.addEventListener("click", clearInputs, { signal });
+  if (captureZoomBtn) {
+    captureZoomBtn.addEventListener("click", handleCaptureZoomPanel, { signal });
+  }
   shareBtn.addEventListener("click", copyShareLink, { signal });
   if (favoritesCopyBtn) {
     favoritesCopyBtn.addEventListener("click", copyFavoritesSummary, { signal });

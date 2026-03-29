@@ -4,6 +4,7 @@ export function createZoomManager() {
   let preview = null;
   let paneMap = {};
   let lastHover = null;
+  let lastCapture = null;
   let config = null;
   let container = null;
   let keyListening = false;
@@ -101,6 +102,102 @@ export function createZoomManager() {
       paneWidth,
       paneHeight: Math.max(1, paneWidth * aspect),
     };
+  }
+
+  function parsePixelValue(value, fallback = 0) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function parseCssLength(token, base) {
+    if (!token) return base;
+    if (token.endsWith("%")) {
+      const percent = Number.parseFloat(token);
+      return Number.isFinite(percent) ? (base * percent) / 100 : base;
+    }
+    if (token.endsWith("px")) {
+      return parsePixelValue(token, base);
+    }
+    if (token === "auto") return base;
+    const parsed = Number.parseFloat(token);
+    return Number.isFinite(parsed) ? parsed : base;
+  }
+
+  function parseBackgroundSize(value, width, height) {
+    if (!value || value === "cover" || value === "contain") {
+      return { width, height };
+    }
+    const parts = value.split(/\s+/).filter(Boolean);
+    if (!parts.length) return { width, height };
+    const bgWidth = parseCssLength(parts[0], width);
+    const bgHeight = parts[1] ? parseCssLength(parts[1], height) : height;
+    return { width: bgWidth, height: bgHeight };
+  }
+
+  function parsePositionToken(token, size, bgSize) {
+    if (!token || token === "center") return (size - bgSize) / 2;
+    if (token === "left" || token === "top") return 0;
+    if (token === "right" || token === "bottom") return size - bgSize;
+    if (token.endsWith("%")) {
+      const percent = Number.parseFloat(token);
+      return Number.isFinite(percent) ? (size - bgSize) * (percent / 100) : 0;
+    }
+    if (token.endsWith("px")) {
+      return parsePixelValue(token, 0);
+    }
+    const parsed = Number.parseFloat(token);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function parseBackgroundPosition(value, width, height, bgWidth, bgHeight) {
+    if (!value) return { x: 0, y: 0 };
+    const parts = value.split(/\s+/).filter(Boolean);
+    const xToken = parts[0] || "center";
+    const yToken = parts[1] || "center";
+    return {
+      x: parsePositionToken(xToken, width, bgWidth),
+      y: parsePositionToken(yToken, height, bgHeight),
+    };
+  }
+
+  function parseBackgroundUrl(value) {
+    if (!value || value === "none") return "";
+    const match = value.match(/url\(["']?(.*?)["']?\)/);
+    return match ? match[1] : "";
+  }
+
+  function buildRoundedRectPath(ctx, x, y, width, height, radius) {
+    const safeRadius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + safeRadius, y);
+    ctx.arcTo(x + width, y, x + width, y + height, safeRadius);
+    ctx.arcTo(x + width, y + height, x, y + height, safeRadius);
+    ctx.arcTo(x, y + height, x, y, safeRadius);
+    ctx.arcTo(x, y, x + width, y, safeRadius);
+    ctx.closePath();
+  }
+
+  function fillRoundedRect(ctx, x, y, width, height, radius, color) {
+    if (!color) return;
+    buildRoundedRectPath(ctx, x, y, width, height, radius);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function strokeRoundedRect(ctx, x, y, width, height, radius, color, lineWidth) {
+    if (!color || !lineWidth) return;
+    buildRoundedRectPath(ctx, x, y, width, height, radius);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+
+  function getFontString(style) {
+    const fontStyle = style.fontStyle || "normal";
+    const fontWeight = style.fontWeight || "400";
+    const fontSize = style.fontSize || "12px";
+    const fontFamily = style.fontFamily || "sans-serif";
+    return `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
   }
 
   function setConfig(nextConfig) {
@@ -310,6 +407,7 @@ export function createZoomManager() {
       clientY: event.clientY,
       shiftKey: event.shiftKey,
     };
+    lastCapture = { ...lastHover };
     showZoomForImage(img, event.clientX, event.clientY, event.shiftKey);
   }
 
@@ -366,6 +464,172 @@ export function createZoomManager() {
     );
   }
 
+  async function capture() {
+    if (!preview || !config) return { ok: false, reason: "unavailable" };
+    if (!lastCapture) return { ok: false, reason: "no-hover" };
+
+    showZoomForImage(
+      lastCapture.img,
+      lastCapture.clientX,
+      lastCapture.clientY,
+      lastCapture.shiftKey
+    );
+
+    if (!preview.classList.contains("visible")) {
+      return { ok: false, reason: "hidden" };
+    }
+
+    const rect = preview.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return { ok: false, reason: "empty" };
+    }
+
+    const scale = window.devicePixelRatio || 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(rect.width * scale));
+    canvas.height = Math.max(1, Math.round(rect.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { ok: false, reason: "no-context" };
+    ctx.scale(scale, scale);
+
+    const previewStyle = window.getComputedStyle(preview);
+    const previewRadius = parsePixelValue(previewStyle.borderRadius);
+    const previewBorderWidth = parsePixelValue(previewStyle.borderWidth);
+    const previewBorderColor = previewStyle.borderColor || "#000";
+    const previewBackground = previewStyle.backgroundColor || "#fff";
+
+    fillRoundedRect(ctx, 0, 0, rect.width, rect.height, previewRadius, previewBackground);
+    strokeRoundedRect(
+      ctx,
+      0,
+      0,
+      rect.width,
+      rect.height,
+      previewRadius,
+      previewBorderColor,
+      previewBorderWidth
+    );
+
+    const panes = Array.from(preview.querySelectorAll(".zoom-pane")).filter(
+      (pane) => !pane.classList.contains("is-hidden")
+    );
+    const imageCache = new Map();
+    const warnings = new Set();
+
+    const loadImage = (url) => {
+      if (imageCache.has(url)) return imageCache.get(url);
+      const promise = new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Image failed to load"));
+        img.src = url;
+      });
+      imageCache.set(url, promise);
+      return promise;
+    };
+
+    for (const pane of panes) {
+      const label = pane.querySelector(".zoom-pane-label");
+      if (label) {
+        const labelRect = label.getBoundingClientRect();
+        const labelStyle = window.getComputedStyle(label);
+        ctx.font = getFontString(labelStyle);
+        ctx.fillStyle = labelStyle.color || "#000";
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        ctx.fillText(
+          label.textContent || "",
+          labelRect.left - rect.left,
+          labelRect.top - rect.top
+        );
+      }
+
+      const imageEl = pane.querySelector(".zoom-pane-image");
+      if (!imageEl) continue;
+      const imageRect = imageEl.getBoundingClientRect();
+      const imageStyle = window.getComputedStyle(imageEl);
+      const imageRadius = parsePixelValue(imageStyle.borderRadius);
+      const imageX = imageRect.left - rect.left;
+      const imageY = imageRect.top - rect.top;
+      const imageWidth = imageRect.width;
+      const imageHeight = imageRect.height;
+
+      fillRoundedRect(
+        ctx,
+        imageX,
+        imageY,
+        imageWidth,
+        imageHeight,
+        imageRadius,
+        imageStyle.backgroundColor || "#eef1f6"
+      );
+
+      const textValue = (imageEl.textContent || "").trim();
+      const isEmpty = imageEl.classList.contains("is-empty");
+      const bgUrl = parseBackgroundUrl(imageStyle.backgroundImage);
+
+      if (!bgUrl || isEmpty) {
+        if (textValue) {
+          ctx.font = getFontString(imageStyle);
+          ctx.fillStyle = imageStyle.color || "#666";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            textValue,
+            imageX + imageWidth / 2,
+            imageY + imageHeight / 2
+          );
+        }
+        continue;
+      }
+
+      let image;
+      try {
+        image = await loadImage(bgUrl);
+      } catch (error) {
+        warnings.add("image-load");
+        continue;
+      }
+
+      const { width: bgWidth, height: bgHeight } = parseBackgroundSize(
+        imageStyle.backgroundSize,
+        imageWidth,
+        imageHeight
+      );
+      const { x: bgX, y: bgY } = parseBackgroundPosition(
+        imageStyle.backgroundPosition,
+        imageWidth,
+        imageHeight,
+        bgWidth,
+        bgHeight
+      );
+
+      ctx.save();
+      buildRoundedRectPath(ctx, imageX, imageY, imageWidth, imageHeight, imageRadius);
+      ctx.clip();
+      ctx.drawImage(image, imageX + bgX, imageY + bgY, bgWidth, bgHeight);
+      ctx.restore();
+    }
+
+    let blob = null;
+    try {
+      blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+    } catch (error) {
+      return { ok: false, reason: "tainted" };
+    }
+
+    if (!blob) return { ok: false, reason: "export-failed" };
+
+    return {
+      ok: true,
+      blob,
+      warnings: Array.from(warnings),
+    };
+  }
+
   function destroy() {
     detach();
     if (preview) {
@@ -383,6 +647,7 @@ export function createZoomManager() {
     updateVisibility,
     updatePaneSize,
     refresh,
+    capture,
     hide,
     destroy,
   };
