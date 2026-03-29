@@ -94,7 +94,7 @@ export function init({ root }) {
 
   function isJobIdHeader(header) {
     const normalized = normalizeHeader(header);
-    return normalized === "jobid" || normalized === "job" || normalized === "uuid";
+    return normalized === "id";
   }
 
   function isNumericValue(value) {
@@ -222,7 +222,7 @@ export function init({ root }) {
 
     if (jobIdIndex < 0) {
       updateStatus({ recordCount: 0 });
-      renderScale("Missing job_id column.");
+      renderScale("Missing id column.");
       return;
     }
 
