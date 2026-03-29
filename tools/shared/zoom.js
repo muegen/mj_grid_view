@@ -177,7 +177,7 @@ export function createZoomManager() {
 
     pane.label.textContent = config?.getSideLabel?.(side) || side;
 
-    const { paneHeight } = getPaneDimensions(data);
+    const { paneWidth, paneHeight } = getPaneDimensions(data);
     pane.image.style.height = `${paneHeight}px`;
 
     if (!data || !data.img || data.img.dataset.loadError === "true") {
@@ -193,6 +193,15 @@ export function createZoomManager() {
     const paneRect = pane.image.getBoundingClientRect();
     const sourceWidth = rect.width || data.img.naturalWidth || 1;
     const sourceHeight = rect.height || data.img.naturalHeight || 1;
+
+    if (zoomLevel <= 1) {
+      pane.image.classList.remove("is-empty");
+      pane.image.textContent = "";
+      pane.image.style.backgroundImage = `url("${data.url}")`;
+      pane.image.style.backgroundSize = `${paneWidth}px ${paneHeight}px`;
+      pane.image.style.backgroundPosition = "center";
+      return;
+    }
 
     const bgWidth = sourceWidth * zoomLevel;
     const bgHeight = sourceHeight * zoomLevel;
