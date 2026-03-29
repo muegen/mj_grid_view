@@ -1120,6 +1120,8 @@ button:focus-visible {
   width: var(--zoom-pane-size, 200px);
   height: var(--zoom-pane-size, 200px);
   background-color: #eef1f6;
+  border: 2px solid transparent;
+  box-sizing: border-box;
   border-radius: 10px;
   background-repeat: no-repeat;
   background-position: center;
@@ -1135,6 +1137,18 @@ button:focus-visible {
 
 .zoom-pane-image:not(.is-empty) {
   color: transparent;
+}
+
+.zoom-preview.is-capturing .zoom-pane-image {
+  border-color: #2f80ff;
+}
+
+.zoom-preview.is-captured .zoom-pane-image {
+  border-color: #28c96f;
+}
+
+.zoom-preview.is-capture-error .zoom-pane-image {
+  border-color: #e5534b;
 }
 
 @media (max-width: 640px) {

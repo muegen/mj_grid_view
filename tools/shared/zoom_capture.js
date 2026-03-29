@@ -61,8 +61,10 @@ export async function captureZoomPanel({
   label = "Zoom panel",
 } = {}) {
   try {
+    zoomManager?.setCaptureState?.("capturing");
     const result = await zoomManager?.capture?.();
     if (!result?.ok) {
+      zoomManager?.setCaptureState?.("error");
       if (result?.reason === "no-hover" || result?.reason === "hidden") {
         setStatus("Hover an image to open the zoom panel first.", true);
       } else if (result?.reason === "tainted") {
@@ -70,18 +72,24 @@ export async function captureZoomPanel({
       } else {
         setStatus(`${label} capture failed.`, true);
       }
+      window.setTimeout(() => zoomManager?.setCaptureState?.(""), 1200);
       return false;
     }
 
-    return finalizeCapture({
+    const ok = await finalizeCapture({
       blob: result.blob,
       warnings: result.warnings || [],
       setStatus,
       filePrefix,
       label,
     });
+    zoomManager?.setCaptureState?.(ok ? "done" : "error");
+    window.setTimeout(() => zoomManager?.setCaptureState?.(""), 1500);
+    return ok;
   } catch (error) {
+    zoomManager?.setCaptureState?.("error");
     setStatus(`${label} capture failed.`, true);
+    window.setTimeout(() => zoomManager?.setCaptureState?.(""), 1200);
     return false;
   }
 }

@@ -208,6 +208,13 @@ export function createZoomManager() {
     updateVisibility();
   }
 
+  function setCaptureState(state) {
+    if (!preview) return;
+    preview.classList.toggle("is-capturing", state === "capturing");
+    preview.classList.toggle("is-captured", state === "done");
+    preview.classList.toggle("is-capture-error", state === "error");
+  }
+
   function setOutlineVisibility(data, visible) {
     if (!data || !data.outline) return;
     data.outline.classList.toggle("visible", Boolean(visible));
@@ -647,6 +654,7 @@ export function createZoomManager() {
     updateVisibility,
     updatePaneSize,
     refresh,
+    setCaptureState,
     capture,
     hide,
     destroy,
