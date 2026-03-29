@@ -11,7 +11,7 @@ import {
 import { copyText } from "../shared/clipboard.js";
 import { createImageFrame } from "../shared/images.js";
 import { createZoomManager } from "../shared/zoom.js";
-import { captureZoomPanel } from "../shared/zoom_capture.js";
+import { captureZoomPanel, downloadZoomPreview } from "../shared/zoom_capture.js";
 
 const IMAGE_COUNT = 4;
 
@@ -481,6 +481,43 @@ export function init({ root }) {
     return cell;
   }
 
+  function createPreviewDownloadButton(label, onClick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "icon-button pair-download";
+    button.setAttribute("aria-label", label);
+    button.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 3a1 1 0 0 1 1 1v8.17l2.59-2.58a1 1 0 1 1 1.41 1.42l-4.3 4.3a1 1 0 0 1-1.4 0l-4.3-4.3a1 1 0 1 1 1.41-1.42L11 12.17V4a1 1 0 0 1 1-1ZM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z"/>
+      </svg>
+    `;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onClick();
+    });
+    return button;
+  }
+
+  async function downloadPairPreview(pairId, label) {
+    const pair = pairRegistry.get(pairId);
+    if (!pair) {
+      showRankSelectionStatus("Preview unavailable for this round.", true);
+      return;
+    }
+    const previewLabel = label ? `${label} preview` : "Round preview";
+    showRankSelectionStatus(`Preparing ${previewLabel}...`);
+    console.info(`[rank] Preparing ${previewLabel}...`);
+    await downloadZoomPreview({
+      zoomManager,
+      pair,
+      setStatus: showRankSelectionStatus,
+      filePrefix: `rank-${pairId}`,
+      label: previewLabel,
+      zoomLevel: 1,
+    });
+  }
+
   function renderRankGridPair(sideData, pairIndex) {
     const grid = createElement("div", "pair-grid rank-grid");
     const pairId = `rank-pair-${pairIndex}`;
@@ -502,8 +539,18 @@ export function init({ root }) {
   function renderRankIndividualPair(sideData, pairIndex) {
     const container = createElement("div", "image-rows rank-rows");
     for (let index = 0; index < IMAGE_COUNT; index += 1) {
+      const rowWrap = createElement("div", "image-row-wrap");
       const row = createElement("div", "image-row");
       const rowPairId = `rank-pair-${pairIndex}-img-${index}`;
+      const rowLabel = `Round ${rankOrderIndex + 1} - Image ${index + 1}`;
+      const rowActions = createElement("div", "image-row-actions");
+      rowActions.appendChild(
+        createPreviewDownloadButton(
+          `Download ${rowLabel} preview`,
+          () => downloadPairPreview(rowPairId, rowLabel)
+        )
+      );
+      rowWrap.appendChild(rowActions);
       rankDisplayOrder.forEach((side) => {
         const entry = sideData.find((item) => item.side === side);
         const jobId = entry?.jobIds[pairIndex] || "";
@@ -516,7 +563,8 @@ export function init({ root }) {
           })
         );
       });
-      container.appendChild(row);
+      rowWrap.appendChild(row);
+      container.appendChild(rowWrap);
     }
     return container;
   }
@@ -569,20 +617,28 @@ export function init({ root }) {
 
     const card = createElement("div", "comparison-card rank-card");
     const header = createElement("div", "comparison-header");
-    header.appendChild(
-      createElement(
-        "div",
-        "pair-title",
-        `Round ${rankOrderIndex + 1} of ${rankOrder.length}`
-      )
-    );
-    header.appendChild(
+    const info = createElement("div", "pair-info");
+    const roundLabel = `Round ${rankOrderIndex + 1} of ${rankOrder.length}`;
+    info.appendChild(createElement("div", "pair-title", roundLabel));
+    info.appendChild(
       createElement(
         "div",
         "pair-meta",
         `Mode: ${mode === "grid" ? "Grid" : "Individual images"}`
       )
     );
+    header.appendChild(info);
+    if (mode === "grid") {
+      const actions = createElement("div", "pair-actions");
+      const pairId = `rank-pair-${pairIndex}`;
+      actions.appendChild(
+        createPreviewDownloadButton(
+          `Download ${roundLabel} preview`,
+          () => downloadPairPreview(pairId, roundLabel)
+        )
+      );
+      header.appendChild(actions);
+    }
     card.appendChild(header);
 
     if (mode === "grid") {

@@ -31,6 +31,7 @@ export function createImageFrame({
       img: null,
       url: "",
       jobId,
+      pairId,
       status: "missing",
       outline: null,
     });
@@ -65,13 +66,26 @@ export function createImageFrame({
   }
   wrapper.appendChild(outline);
 
-  registerPairImage(registry, pairId, side, {
+  const entry = {
     img,
     url,
     jobId,
+    pairId,
     status: "ok",
     outline,
-  });
+    aspect: null,
+  };
+  registerPairImage(registry, pairId, side, entry);
+
+  const setAspect = () => {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    entry.aspect = img.naturalHeight / img.naturalWidth;
+  };
+  if (img.complete) {
+    setAspect();
+  } else {
+    img.addEventListener("load", setAspect);
+  }
 
   img.addEventListener("error", () => {
     img.dataset.loadError = "true";

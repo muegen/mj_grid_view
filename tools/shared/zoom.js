@@ -8,6 +8,9 @@ export function createZoomManager() {
   let config = null;
   let container = null;
   let keyListening = false;
+  let captureAspectOverride = null;
+  let capturePaneSizeOverride = null;
+  let captureInFlight = false;
 
   function getAllSides() {
     const sides = config?.getAllSides?.();
@@ -21,7 +24,11 @@ export function createZoomManager() {
     getAllSides().forEach((side) => {
       const pane = createElement("div", "zoom-pane");
       pane.dataset.side = side;
-      const label = createElement("div", "zoom-pane-label", side);
+      const label = createElement("div", "zoom-pane-label");
+      const labelText = createElement("span", "zoom-pane-label-text", side);
+      const labelJob = createElement("span", "zoom-pane-label-job", "");
+      label.appendChild(labelText);
+      label.appendChild(labelJob);
       const image = createElement(
         "div",
         "zoom-pane-image is-empty",
@@ -30,7 +37,7 @@ export function createZoomManager() {
       pane.appendChild(label);
       pane.appendChild(image);
       preview.appendChild(pane);
-      paneMap[side] = { container: pane, label, image };
+      paneMap[side] = { container: pane, label, labelText, labelJob, image };
     });
     document.body.appendChild(preview);
   }
@@ -88,7 +95,21 @@ export function createZoomManager() {
   }
 
   function getPaneDimensions(data) {
-    const paneWidth = config?.getZoomSize?.() || 200;
+    const paneWidth = Number.isFinite(capturePaneSizeOverride)
+      ? capturePaneSizeOverride
+      : config?.getZoomSize?.() || 200;
+    if (Number.isFinite(captureAspectOverride) && captureAspectOverride > 0) {
+      return {
+        paneWidth,
+        paneHeight: Math.max(1, paneWidth * captureAspectOverride),
+      };
+    }
+    if (Number.isFinite(data?.aspect) && data.aspect > 0) {
+      return {
+        paneWidth,
+        paneHeight: Math.max(1, paneWidth * data.aspect),
+      };
+    }
     if (!data || !data.img || data.img.dataset.loadError === "true") {
       return { paneWidth, paneHeight: paneWidth };
     }
@@ -102,6 +123,17 @@ export function createZoomManager() {
       paneWidth,
       paneHeight: Math.max(1, paneWidth * aspect),
     };
+  }
+
+  function getJobIdDisplay(data) {
+    const jobId = data?.jobId || "";
+    if (!jobId) return "";
+    const pairId = data?.pairId || data?.img?.dataset?.pairId || "";
+    const match = pairId.match(/-img-(\d+)$/);
+    if (!match) return jobId;
+    const index = Number.parseInt(match[1], 10);
+    if (!Number.isFinite(index)) return jobId;
+    return `${jobId}_${index + 1}`;
   }
 
   function parsePixelValue(value, fallback = 0) {
@@ -164,6 +196,26 @@ export function createZoomManager() {
     if (!value || value === "none") return "";
     const match = value.match(/url\(["']?(.*?)["']?\)/);
     return match ? match[1] : "";
+  }
+
+  function nextFrame() {
+    return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+  }
+
+  function isCaptureDebugEnabled() {
+    try {
+      return (
+        window.__MJ_DEBUG_CAPTURE__ === true ||
+        window.localStorage?.getItem("mj-debug-capture") === "1"
+      );
+    } catch (error) {
+      return window.__MJ_DEBUG_CAPTURE__ === true;
+    }
+  }
+
+  function logCaptureDebug(stage, payload) {
+    if (!isCaptureDebugEnabled()) return;
+    console.info("[zoom capture] " + stage, payload);
   }
 
   function buildRoundedRectPath(ctx, x, y, width, height, radius) {
@@ -279,7 +331,14 @@ export function createZoomManager() {
     const pane = paneMap[side];
     if (!pane) return;
 
-    pane.label.textContent = config?.getSideLabel?.(side) || side;
+    if (pane.labelText) {
+      pane.labelText.textContent = config?.getSideLabel?.(side) || side;
+    } else {
+      pane.label.textContent = config?.getSideLabel?.(side) || side;
+    }
+    if (pane.labelJob) {
+      pane.labelJob.textContent = getJobIdDisplay(data);
+    }
 
     const { paneWidth, paneHeight } = getPaneDimensions(data);
     pane.image.style.height = `${paneHeight}px`;
@@ -471,170 +530,331 @@ export function createZoomManager() {
     );
   }
 
-  async function capture() {
+  function renderPairPreview(pair, xRatio, yRatio, zoomLevel) {
+    if (!pair || !config) return false;
+    updateOrder();
+    updateVisibility();
+    const level = Number.isFinite(zoomLevel)
+      ? zoomLevel
+      : config?.getZoomLevel?.() || 3;
+    const activeSides = config?.getActiveSides?.() || getAllSides();
+    activeSides.forEach((side) => {
+      updateZoomPane(side, pair[side], xRatio, yRatio, level);
+    });
+    return true;
+  }
+
+  function resolveAspectOverride(pair) {
+    if (!pair) return null;
+    const order =
+      config?.getDisplayOrder?.() ||
+      config?.getActiveSides?.() ||
+      Object.keys(pair);
+    const seen = new Set();
+    const orderedEntries = [];
+    order.forEach((side) => {
+      const entry = pair[side];
+      if (entry && !seen.has(entry)) {
+        seen.add(entry);
+        orderedEntries.push(entry);
+      }
+    });
+    const entries = orderedEntries.length
+      ? orderedEntries
+      : Object.values(pair).filter(Boolean);
+    for (const entry of entries) {
+      if (Number.isFinite(entry?.aspect) && entry.aspect > 0) {
+        return entry.aspect;
+      }
+      const img = entry?.img;
+      if (img && img.naturalWidth && img.naturalHeight) {
+        return img.naturalHeight / img.naturalWidth;
+      }
+    }
+    return null;
+  }
+
+  async function capture(options = {}) {
     if (!preview || !config) return { ok: false, reason: "unavailable" };
-    if (!lastCapture) return { ok: false, reason: "no-hover" };
-
-    showZoomForImage(
-      lastCapture.img,
-      lastCapture.clientX,
-      lastCapture.clientY,
-      lastCapture.shiftKey
+    if (captureInFlight) return { ok: false, reason: "busy" };
+    captureInFlight = true;
+    const { pair, xRatio = 0.5, yRatio = 0.5, zoomLevel } = options || {};
+    const wasVisible = preview.classList.contains("visible");
+    const hasAspectOverride = Object.prototype.hasOwnProperty.call(
+      options,
+      "aspectOverride"
     );
-
-    if (!preview.classList.contains("visible")) {
-      return { ok: false, reason: "hidden" };
-    }
-
-    const rect = preview.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      return { ok: false, reason: "empty" };
-    }
-
-    const scale = window.devicePixelRatio || 1;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(rect.width * scale));
-    canvas.height = Math.max(1, Math.round(rect.height * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return { ok: false, reason: "no-context" };
-    ctx.scale(scale, scale);
-
-    const previewStyle = window.getComputedStyle(preview);
-    const previewRadius = parsePixelValue(previewStyle.borderRadius);
-    const previewBorderWidth = parsePixelValue(previewStyle.borderWidth);
-    const previewBorderColor = previewStyle.borderColor || "#000";
-    const previewBackground = previewStyle.backgroundColor || "#fff";
-
-    fillRoundedRect(ctx, 0, 0, rect.width, rect.height, previewRadius, previewBackground);
-    strokeRoundedRect(
-      ctx,
-      0,
-      0,
-      rect.width,
-      rect.height,
-      previewRadius,
-      previewBorderColor,
-      previewBorderWidth
-    );
-
-    const panes = Array.from(preview.querySelectorAll(".zoom-pane")).filter(
-      (pane) => !pane.classList.contains("is-hidden")
-    );
-    const imageCache = new Map();
-    const warnings = new Set();
-
-    const loadImage = (url) => {
-      if (imageCache.has(url)) return imageCache.get(url);
-      const promise = new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error("Image failed to load"));
-        img.src = url;
-      });
-      imageCache.set(url, promise);
-      return promise;
+    const nextAspectOverride = hasAspectOverride
+      ? Number.isFinite(options.aspectOverride) && options.aspectOverride > 0
+        ? options.aspectOverride
+        : null
+      : resolveAspectOverride(pair);
+    const paneSizeOverride =
+      Number.isFinite(options.paneSize) && options.paneSize > 0
+        ? options.paneSize
+        : null;
+    const priorPaneSize = preview.style.getPropertyValue("--zoom-pane-size");
+    const priorInlineStyles = {
+      transition: preview.style.transition,
+      transform: preview.style.transform,
+      opacity: preview.style.opacity,
+      visibility: preview.style.visibility,
     };
 
-    for (const pane of panes) {
-      const label = pane.querySelector(".zoom-pane-label");
-      if (label) {
-        const labelRect = label.getBoundingClientRect();
-        const labelStyle = window.getComputedStyle(label);
-        ctx.font = getFontString(labelStyle);
-        ctx.fillStyle = labelStyle.color || "#000";
-        ctx.textBaseline = "top";
-        ctx.textAlign = "left";
-        ctx.fillText(
-          label.textContent || "",
-          labelRect.left - rect.left,
-          labelRect.top - rect.top
-        );
-      }
-
-      const imageEl = pane.querySelector(".zoom-pane-image");
-      if (!imageEl) continue;
-      const imageRect = imageEl.getBoundingClientRect();
-      const imageStyle = window.getComputedStyle(imageEl);
-      const imageRadius = parsePixelValue(imageStyle.borderRadius);
-      const imageX = imageRect.left - rect.left;
-      const imageY = imageRect.top - rect.top;
-      const imageWidth = imageRect.width;
-      const imageHeight = imageRect.height;
-
-      fillRoundedRect(
-        ctx,
-        imageX,
-        imageY,
-        imageWidth,
-        imageHeight,
-        imageRadius,
-        imageStyle.backgroundColor || "#eef1f6"
-      );
-
-      const textValue = (imageEl.textContent || "").trim();
-      const isEmpty = imageEl.classList.contains("is-empty");
-      const bgUrl = parseBackgroundUrl(imageStyle.backgroundImage);
-
-      if (!bgUrl || isEmpty) {
-        if (textValue) {
-          ctx.font = getFontString(imageStyle);
-          ctx.fillStyle = imageStyle.color || "#666";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(
-            textValue,
-            imageX + imageWidth / 2,
-            imageY + imageHeight / 2
-          );
-        }
-        continue;
-      }
-
-      let image;
-      try {
-        image = await loadImage(bgUrl);
-      } catch (error) {
-        warnings.add("image-load");
-        continue;
-      }
-
-      const { width: bgWidth, height: bgHeight } = parseBackgroundSize(
-        imageStyle.backgroundSize,
-        imageWidth,
-        imageHeight
-      );
-      const { x: bgX, y: bgY } = parseBackgroundPosition(
-        imageStyle.backgroundPosition,
-        imageWidth,
-        imageHeight,
-        bgWidth,
-        bgHeight
-      );
-
-      ctx.save();
-      buildRoundedRectPath(ctx, imageX, imageY, imageWidth, imageHeight, imageRadius);
-      ctx.clip();
-      ctx.drawImage(image, imageX + bgX, imageY + bgY, bgWidth, bgHeight);
-      ctx.restore();
-    }
-
-    let blob = null;
     try {
-      blob = await new Promise((resolve) =>
-        canvas.toBlob(resolve, "image/png")
+      if (pair) {
+        captureAspectOverride = nextAspectOverride;
+        capturePaneSizeOverride = paneSizeOverride;
+        if (paneSizeOverride) {
+          preview.style.setProperty("--zoom-pane-size", `${paneSizeOverride}px`);
+        }
+        const rendered = renderPairPreview(pair, xRatio, yRatio, zoomLevel);
+        if (!rendered) return { ok: false, reason: "missing" };
+        if (!wasVisible) preview.classList.add("visible");
+      } else {
+        if (!lastCapture) return { ok: false, reason: "no-hover" };
+        showZoomForImage(
+          lastCapture.img,
+          lastCapture.clientX,
+          lastCapture.clientY,
+          lastCapture.shiftKey
+        );
+
+        if (!preview.classList.contains("visible")) {
+          return { ok: false, reason: "hidden" };
+        }
+      }
+
+      preview.style.transition = "none";
+      preview.style.transform = "none";
+      preview.style.opacity = "1";
+      preview.style.visibility = "visible";
+      await nextFrame();
+      await nextFrame();
+
+      const rect = preview.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return { ok: false, reason: "empty" };
+      }
+
+      const scale = window.devicePixelRatio || 1;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(rect.width * scale));
+      canvas.height = Math.max(1, Math.round(rect.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return { ok: false, reason: "no-context" };
+      ctx.scale(scale, scale);
+
+      const previewStyle = window.getComputedStyle(preview);
+      logCaptureDebug("preview-layout", {
+        pairMode: Boolean(pair),
+        wasVisible,
+        aspectOverride: nextAspectOverride,
+        paneSizeOverride,
+        scale,
+        previewRect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+        computedTransform: previewStyle.transform,
+        className: preview.className,
+      });
+      const previewRadius = parsePixelValue(previewStyle.borderRadius);
+      const previewBorderWidth = parsePixelValue(previewStyle.borderWidth);
+      const previewBorderColor = previewStyle.borderColor || "#000";
+      const previewBackground = previewStyle.backgroundColor || "#fff";
+
+      fillRoundedRect(ctx, 0, 0, rect.width, rect.height, previewRadius, previewBackground);
+      strokeRoundedRect(
+        ctx,
+        0,
+        0,
+        rect.width,
+        rect.height,
+        previewRadius,
+        previewBorderColor,
+        previewBorderWidth
       );
-    } catch (error) {
-      return { ok: false, reason: "tainted" };
+
+      const panes = Array.from(preview.querySelectorAll(".zoom-pane")).filter(
+        (pane) => !pane.classList.contains("is-hidden")
+      );
+      const paneDebug = [];
+      const imageCache = new Map();
+      const warnings = new Set();
+
+      const loadImage = (url) => {
+        if (imageCache.has(url)) return imageCache.get(url);
+        const promise = new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("Image failed to load"));
+          img.src = url;
+        });
+        imageCache.set(url, promise);
+        return promise;
+      };
+
+      for (const pane of panes) {
+        const label = pane.querySelector(".zoom-pane-label");
+        if (label) {
+          const labelRect = label.getBoundingClientRect();
+          const labelText = label.querySelector(".zoom-pane-label-text");
+          const labelJob = label.querySelector(".zoom-pane-label-job");
+          if (labelText) {
+            const labelStyle = window.getComputedStyle(labelText);
+            ctx.font = getFontString(labelStyle);
+            ctx.fillStyle = labelStyle.color || "#000";
+            ctx.textBaseline = "top";
+            ctx.textAlign = "left";
+            ctx.fillText(
+              labelText.textContent || "",
+              labelRect.left - rect.left,
+              labelRect.top - rect.top
+            );
+          } else {
+            const labelStyle = window.getComputedStyle(label);
+            ctx.font = getFontString(labelStyle);
+            ctx.fillStyle = labelStyle.color || "#000";
+            ctx.textBaseline = "top";
+            ctx.textAlign = "left";
+            ctx.fillText(
+              label.textContent || "",
+              labelRect.left - rect.left,
+              labelRect.top - rect.top
+            );
+          }
+          if (labelJob) {
+            const jobText = (labelJob.textContent || "").trim();
+            if (jobText) {
+              const jobStyle = window.getComputedStyle(labelJob);
+              ctx.font = getFontString(jobStyle);
+              ctx.fillStyle = jobStyle.color || "#000";
+              ctx.textBaseline = "top";
+              ctx.textAlign = "right";
+              ctx.fillText(
+                jobText,
+                labelRect.right - rect.left,
+                labelRect.top - rect.top
+              );
+            }
+          }
+        }
+
+        const imageEl = pane.querySelector(".zoom-pane-image");
+        if (!imageEl) continue;
+        const imageRect = imageEl.getBoundingClientRect();
+        const imageStyle = window.getComputedStyle(imageEl);
+        const imageRadius = parsePixelValue(imageStyle.borderRadius);
+        const imageX = imageRect.left - rect.left;
+        const imageY = imageRect.top - rect.top;
+        const imageWidth = imageRect.width;
+        const imageHeight = imageRect.height;
+        paneDebug.push({
+          side: pane.dataset.side || "",
+          imageRect: {
+            left: imageRect.left,
+            top: imageRect.top,
+            width: imageWidth,
+            height: imageHeight,
+          },
+          styleHeight: imageEl.style.height,
+          backgroundSize: imageStyle.backgroundSize,
+          backgroundPosition: imageStyle.backgroundPosition,
+          backgroundImage: imageStyle.backgroundImage,
+          text: (imageEl.textContent || "").trim(),
+          isEmpty: imageEl.classList.contains("is-empty"),
+        });
+
+        fillRoundedRect(
+          ctx,
+          imageX,
+          imageY,
+          imageWidth,
+          imageHeight,
+          imageRadius,
+          imageStyle.backgroundColor || "#eef1f6"
+        );
+
+        const textValue = (imageEl.textContent || "").trim();
+        const isEmpty = imageEl.classList.contains("is-empty");
+        const bgUrl = parseBackgroundUrl(imageStyle.backgroundImage);
+
+        if (!bgUrl || isEmpty) {
+          if (textValue) {
+            ctx.font = getFontString(imageStyle);
+            ctx.fillStyle = imageStyle.color || "#666";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(
+              textValue,
+              imageX + imageWidth / 2,
+              imageY + imageHeight / 2
+            );
+          }
+          continue;
+        }
+
+        let image;
+        try {
+          image = await loadImage(bgUrl);
+        } catch (error) {
+          warnings.add("image-load");
+          continue;
+        }
+
+        const { width: bgWidth, height: bgHeight } = parseBackgroundSize(
+          imageStyle.backgroundSize,
+          imageWidth,
+          imageHeight
+        );
+        const { x: bgX, y: bgY } = parseBackgroundPosition(
+          imageStyle.backgroundPosition,
+          imageWidth,
+          imageHeight,
+          bgWidth,
+          bgHeight
+        );
+
+        ctx.save();
+        buildRoundedRectPath(ctx, imageX, imageY, imageWidth, imageHeight, imageRadius);
+        ctx.clip();
+        ctx.drawImage(image, imageX + bgX, imageY + bgY, bgWidth, bgHeight);
+        ctx.restore();
+      }
+
+      logCaptureDebug("pane-layout", paneDebug);
+
+      let blob = null;
+      try {
+        blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/png")
+        );
+      } catch (error) {
+        return { ok: false, reason: "tainted" };
+      }
+
+      if (!blob) return { ok: false, reason: "export-failed" };
+
+      return {
+        ok: true,
+        blob,
+        warnings: Array.from(warnings),
+      };
+    } finally {
+      captureAspectOverride = null;
+      capturePaneSizeOverride = null;
+      preview.style.transition = priorInlineStyles.transition;
+      preview.style.transform = priorInlineStyles.transform;
+      preview.style.opacity = priorInlineStyles.opacity;
+      preview.style.visibility = priorInlineStyles.visibility;
+      preview.style.setProperty("--zoom-pane-size", priorPaneSize);
+      if (pair && !wasVisible) preview.classList.remove("visible");
+      captureInFlight = false;
     }
-
-    if (!blob) return { ok: false, reason: "export-failed" };
-
-    return {
-      ok: true,
-      blob,
-      warnings: Array.from(warnings),
-    };
   }
 
   function destroy() {
