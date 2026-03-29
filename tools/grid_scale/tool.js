@@ -58,6 +58,8 @@ export function init({ root }) {
   let previewInner = null;
   let previewCaptureBtn = null;
   let previewFitBtn = null;
+  let previewStatusEl = null;
+  let previewStatusTimer = null;
   let previewOpen = false;
   let lastScaleLayout = null;
   let parseTimer = null;
@@ -663,6 +665,19 @@ export function init({ root }) {
     refreshScalePreview();
   }
 
+  function showPreviewStatus(message, isError = false, hold = false) {
+    if (!previewStatusEl) return;
+    if (previewStatusTimer) window.clearTimeout(previewStatusTimer);
+    previewStatusEl.textContent = message;
+    previewStatusEl.classList.toggle("is-error", Boolean(isError));
+    previewStatusEl.classList.toggle("is-pending", Boolean(hold && !isError));
+    if (!message || hold) return;
+    previewStatusTimer = window.setTimeout(() => {
+      previewStatusEl.textContent = "";
+      previewStatusEl.classList.remove("is-error", "is-pending");
+    }, 2000);
+  }
+
   function getPreviewScale() {
     const base = getZoomLevel();
     return Math.max(1, base / 3);
@@ -674,7 +689,11 @@ export function init({ root }) {
     const backdrop = createElement("div", "scale-preview-backdrop");
     previewPanel = createElement("div", "scale-preview-panel");
     const header = createElement("div", "scale-preview-header");
-    header.appendChild(createElement("div", "scale-preview-title", "Scale Preview"));
+    const meta = createElement("div", "scale-preview-meta");
+    meta.appendChild(createElement("div", "scale-preview-title", "Scale Preview"));
+    previewStatusEl = createElement("div", "scale-preview-status");
+    meta.appendChild(previewStatusEl);
+    header.appendChild(meta);
     const actions = createElement("div", "scale-preview-actions");
     previewFitBtn = createElement("button", "secondary");
     previewFitBtn.type = "button";
@@ -781,6 +800,7 @@ export function init({ root }) {
   async function captureScalePreviewPanel() {
     if (!previewOpen || !previewPanel || !previewInner) {
       showShareStatus("Open the scale preview first.", true);
+      showPreviewStatus("Open the scale preview first.", true);
       return;
     }
 
@@ -788,8 +808,12 @@ export function init({ root }) {
     const panelRect = previewPanel.getBoundingClientRect();
     if (!panelRect.width || !panelRect.height) {
       showShareStatus("Scale preview is empty.", true);
+      showPreviewStatus("Scale preview is empty.", true);
       return;
     }
+
+    showPreviewStatus("Capturing scale preview...", false, true);
+    console.info("[scale] Capturing scale preview...");
 
     const content = previewInner.firstElementChild;
     const innerRect = previewInner.getBoundingClientRect();
@@ -826,6 +850,7 @@ export function init({ root }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       showShareStatus("Scale preview capture failed.", true);
+      showPreviewStatus("Scale preview capture failed.", true);
       return;
     }
     ctx.scale(scale, scale);
@@ -951,13 +976,18 @@ export function init({ root }) {
     );
     if (!blob) {
       showShareStatus("Capture blocked by browser. Use system snip.", true);
+      showPreviewStatus("Capture blocked by browser. Use system snip.", true);
       return;
     }
 
     await finalizeCapture({
       blob,
       warnings: Array.from(warnings),
-      setStatus: showShareStatus,
+      setStatus: (message, isError) => {
+        showShareStatus(message, isError);
+        showPreviewStatus(message, isError);
+        console.info("[scale] " + message);
+      },
       filePrefix: "scale-preview",
       label: "Scale preview",
     });
@@ -968,9 +998,14 @@ export function init({ root }) {
       await captureScalePreviewPanel();
       return;
     }
+    showShareStatus("Capturing zoom panel...");
+    console.info("[scale] Capturing zoom panel...");
     await captureZoomPanel({
       zoomManager,
-      setStatus: showShareStatus,
+      setStatus: (message, isError) => {
+        showShareStatus(message, isError);
+        console.info("[scale] " + message);
+      },
       filePrefix: "scale-zoom",
     });
   }

@@ -392,9 +392,14 @@ export function init({ root }) {
   }
 
   async function handleCaptureZoomPanel() {
+    showRankSelectionStatus("Capturing zoom panel...");
+    console.info("[rank] Capturing zoom panel...");
     await captureZoomPanel({
       zoomManager,
-      setStatus: showRankSelectionStatus,
+      setStatus: (message, isError) => {
+        showRankSelectionStatus(message, isError);
+        console.info("[rank] " + message);
+      },
       filePrefix: "rank-zoom",
     });
   }

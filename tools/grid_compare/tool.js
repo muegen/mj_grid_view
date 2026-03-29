@@ -576,9 +576,14 @@ export function init({ root }) {
   }
 
   async function handleCaptureZoomPanel() {
+    showShareStatus("Capturing zoom panel...");
+    console.info("[compare] Capturing zoom panel...");
     await captureZoomPanel({
       zoomManager,
-      setStatus: showShareStatus,
+      setStatus: (message, isError) => {
+        showShareStatus(message, isError);
+        console.info("[compare] " + message);
+      },
       filePrefix: "compare-zoom",
     });
   }
