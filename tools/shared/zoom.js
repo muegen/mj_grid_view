@@ -11,6 +11,7 @@ export function createZoomManager() {
   let captureAspectOverride = null;
   let capturePaneSizeOverride = null;
   let captureInFlight = false;
+  let paneSize = null;
 
   function getAllSides() {
     const sides = config?.getAllSides?.();
@@ -87,17 +88,28 @@ export function createZoomManager() {
     });
   }
 
-  function updatePaneSize() {
+  function updatePaneSize(pair) {
     if (!preview || !config) return;
-    const size = config.getZoomSize?.();
+    if (Number.isFinite(capturePaneSizeOverride) && capturePaneSizeOverride > 0) {
+      paneSize = capturePaneSizeOverride;
+      preview.style.setProperty(
+        "--zoom-pane-size",
+        `${capturePaneSizeOverride}px`
+      );
+      return;
+    }
+    const size = calculateMaxPaneSize(pair);
     if (!size) return;
+    paneSize = size;
     preview.style.setProperty("--zoom-pane-size", `${size}px`);
   }
 
   function getPaneDimensions(data) {
     const paneWidth = Number.isFinite(capturePaneSizeOverride)
       ? capturePaneSizeOverride
-      : config?.getZoomSize?.() || 200;
+      : Number.isFinite(paneSize)
+        ? paneSize
+        : config?.getZoomSize?.() || 200;
     if (Number.isFinite(captureAspectOverride) && captureAspectOverride > 0) {
       return {
         paneWidth,
@@ -247,6 +259,81 @@ export function createZoomManager() {
     if (!value || value === "none") return "";
     const match = value.match(/url\(["']?(.*?)["']?\)/);
     return match ? match[1] : "";
+  }
+
+  function resolvePaneAspect(data) {
+    if (Number.isFinite(captureAspectOverride) && captureAspectOverride > 0) {
+      return captureAspectOverride;
+    }
+    if (Number.isFinite(data?.aspect) && data.aspect > 0) return data.aspect;
+    const width = data?.img?.naturalWidth || data?.img?.clientWidth || 0;
+    const height = data?.img?.naturalHeight || data?.img?.clientHeight || 0;
+    if (width && height) return height / width;
+    return 1;
+  }
+
+  function getPreviewLayoutMetrics(side) {
+    if (!preview) {
+      return {
+        paddingX: 0,
+        paddingY: 0,
+        gap: 0,
+        rowGap: 0,
+        labelHeight: 0,
+      };
+    }
+    const previewStyle = window.getComputedStyle(preview);
+    const paddingX =
+      parsePixelValue(previewStyle.paddingLeft) +
+      parsePixelValue(previewStyle.paddingRight);
+    const paddingY =
+      parsePixelValue(previewStyle.paddingTop) +
+      parsePixelValue(previewStyle.paddingBottom);
+    const gap = parsePixelValue(
+      previewStyle.columnGap || previewStyle.gap,
+      0
+    );
+    const pane = paneMap[side];
+    if (!pane) {
+      return { paddingX, paddingY, gap, rowGap: 0, labelHeight: 0 };
+    }
+    const paneStyle = window.getComputedStyle(pane.container);
+    const rowGap = parsePixelValue(paneStyle.rowGap || paneStyle.gap, 0);
+    const labelRect = pane.label.getBoundingClientRect();
+    const labelHeight =
+      labelRect.height ||
+      parsePixelValue(window.getComputedStyle(pane.label).height, 0) ||
+      0;
+    return { paddingX, paddingY, gap, rowGap, labelHeight };
+  }
+
+  function calculateMaxPaneSize(pair) {
+    if (!preview) return null;
+    const sides = config?.getActiveSides?.() || getAllSides();
+    const activeSides = sides.filter((side) => paneMap[side]);
+    const paneCount = activeSides.length || 1;
+    const primarySide = activeSides[0] || getAllSides()[0];
+    const { paddingX, paddingY, gap, rowGap, labelHeight } =
+      getPreviewLayoutMetrics(primarySide);
+    const screenPadding = 24;
+    const availableWidth = Math.max(0, window.innerWidth - screenPadding * 2);
+    const availableHeight = Math.max(0, window.innerHeight - screenPadding * 2);
+    const maxWidthByScreen =
+      (availableWidth - paddingX - gap * (paneCount - 1)) / paneCount;
+    const maxImageHeight =
+      availableHeight - paddingY - labelHeight - rowGap;
+
+    const aspectWidths = activeSides
+      .map((side) => resolvePaneAspect(pair?.[side]))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .map((aspect) => maxImageHeight / aspect);
+    const maxWidthByHeight =
+      aspectWidths.length > 0 ? Math.min(...aspectWidths) : maxWidthByScreen;
+    const nextSize = Math.floor(Math.min(maxWidthByScreen, maxWidthByHeight));
+    if (!Number.isFinite(nextSize) || nextSize <= 0) {
+      return config?.getZoomSize?.() || 200;
+    }
+    return nextSize;
   }
 
   function nextFrame() {
@@ -447,33 +534,11 @@ export function createZoomManager() {
     pane.image.style.backgroundPosition = `${bgX}px ${bgY}px`;
   }
 
-  function positionZoomPreview(clientY, pair, hoveredImg) {
+  function positionZoomPreview() {
     if (!preview) return;
-    const offset = 16;
     const rect = preview.getBoundingClientRect();
-    let centerX = window.innerWidth / 2;
-
-    if (pair && config?.getActiveSides) {
-      const rects = config
-        .getActiveSides()
-        .map((side) => pair[side]?.img?.getBoundingClientRect())
-        .filter(Boolean);
-      if (rects.length) {
-        const leftEdge = Math.min(...rects.map((rectItem) => rectItem.left));
-        const rightEdge = Math.max(...rects.map((rectItem) => rectItem.right));
-        centerX = (leftEdge + rightEdge) / 2;
-      }
-    } else if (hoveredImg) {
-      const rectImg = hoveredImg.getBoundingClientRect();
-      centerX = (rectImg.left + rectImg.right) / 2;
-    }
-
-    let left = centerX - rect.width / 2;
-    let top = clientY + offset;
-
-    if (top + rect.height > window.innerHeight) {
-      top = clientY - rect.height - offset;
-    }
+    let left = (window.innerWidth - rect.width) / 2;
+    let top = (window.innerHeight - rect.height) / 2;
 
     left = Math.max(12, Math.min(left, window.innerWidth - rect.width - 12));
     top = Math.max(12, Math.min(top, window.innerHeight - rect.height - 12));
@@ -507,6 +572,8 @@ export function createZoomManager() {
     const yRatio = (clientY - rect.top) / rect.height;
     const zoomLevel = config?.getZoomLevel?.() || 3;
 
+    updatePaneSize(pair);
+
     config?.getActiveSides?.().forEach((side) => {
       const data = pair[side];
       updateZoomPane(side, data, xRatio, yRatio, zoomLevel);
@@ -514,7 +581,7 @@ export function createZoomManager() {
     });
 
     preview.classList.add("visible");
-    positionZoomPreview(clientY, pair, img);
+    positionZoomPreview();
   }
 
   function hide() {
@@ -599,6 +666,7 @@ export function createZoomManager() {
     if (!pair || !config) return false;
     updateOrder();
     updateVisibility();
+    updatePaneSize(pair);
     const level = Number.isFinite(zoomLevel)
       ? zoomLevel
       : config?.getZoomLevel?.() || 3;
