@@ -8,6 +8,7 @@ export function createZoomManager() {
   let config = null;
   let container = null;
   let keyListening = false;
+  let globalMoveListening = false;
   let captureAspectOverride = null;
   let capturePaneSizeOverride = null;
   let captureInFlight = false;
@@ -150,10 +151,12 @@ export function createZoomManager() {
 
   function setLockedImage(img) {
     lockedImg = img || null;
+    if (lockedImg) enableGlobalMoveTracking();
   }
 
   function clearLockedImage() {
     lockedImg = null;
+    disableGlobalMoveTracking();
   }
 
   function resolveLockedImage() {
@@ -167,6 +170,18 @@ export function createZoomManager() {
       return null;
     }
     return lockedImg;
+  }
+
+  function enableGlobalMoveTracking() {
+    if (globalMoveListening) return;
+    document.addEventListener("mousemove", handleZoomMove);
+    globalMoveListening = true;
+  }
+
+  function disableGlobalMoveTracking() {
+    if (!globalMoveListening) return;
+    document.removeEventListener("mousemove", handleZoomMove);
+    globalMoveListening = false;
   }
 
   function getFallbackPoint(img) {
@@ -753,6 +768,7 @@ export function createZoomManager() {
       container.removeEventListener("mouseleave", handleZoomLeave);
       container = null;
     }
+    disableGlobalMoveTracking();
     if (keyListening) {
       document.removeEventListener("keydown", handleZoomKeyChange);
       document.removeEventListener("keyup", handleZoomKeyChange);
