@@ -12,6 +12,7 @@ export function createZoomManager() {
   let capturePaneSizeOverride = null;
   let captureInFlight = false;
   let paneSize = null;
+  let lockedImg = null;
 
   function getAllSides() {
     const sides = config?.getAllSides?.();
@@ -144,6 +145,61 @@ export function createZoomManager() {
     return {
       sourceWidth: data.img.naturalWidth || data.img.clientWidth || 0,
       sourceHeight: data.img.naturalHeight || data.img.clientHeight || 0,
+    };
+  }
+
+  function setLockedImage(img) {
+    lockedImg = img || null;
+  }
+
+  function clearLockedImage() {
+    lockedImg = null;
+  }
+
+  function resolveLockedImage() {
+    if (!lockedImg) return null;
+    if (!lockedImg.isConnected || !lockedImg.dataset?.pairId) {
+      lockedImg = null;
+      return null;
+    }
+    if (container && !container.contains(lockedImg)) {
+      lockedImg = null;
+      return null;
+    }
+    return lockedImg;
+  }
+
+  function getFallbackPoint(img) {
+    const rect = img?.getBoundingClientRect?.();
+    if (!rect || !rect.width || !rect.height) {
+      return { clientX: 0, clientY: 0 };
+    }
+    return {
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+  }
+
+  function getTrackingRect(pair) {
+    if (!pair) return null;
+    const activeSides = config?.getActiveSides?.() || getAllSides();
+    let data = null;
+    for (const side of activeSides) {
+      if (pair[side]) {
+        data = pair[side];
+        break;
+      }
+    }
+    const { paneWidth, paneHeight } = getPaneDimensions(data);
+    const width = Math.max(1, paneWidth);
+    const height = Math.max(1, paneHeight);
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    return {
+      left: centerX - width / 2,
+      top: centerY - height / 2,
+      width,
+      height,
     };
   }
 
@@ -548,31 +604,52 @@ export function createZoomManager() {
   }
 
   function showZoomForImage(img, clientX, clientY, shiftKey) {
-    if (!img || !img.dataset.pairId) return;
-    if (!config?.shouldZoom?.(shiftKey)) {
+    const locked = resolveLockedImage();
+    const activeImg = locked || img;
+    if (!activeImg || !activeImg.dataset.pairId) {
+      clearLockedImage();
       hide();
       return;
+    }
+    if (!config?.shouldZoom?.(shiftKey)) {
+      clearLockedImage();
+      hide();
+      return;
+    }
+    if (!locked && shiftKey) {
+      setLockedImage(activeImg);
     }
 
     const registry = config?.getRegistry?.();
     if (!registry) return;
-    const pair = registry.get(img.dataset.pairId);
+    const pair = registry.get(activeImg.dataset.pairId);
     if (!pair) {
       hide();
       return;
     }
 
-    const rect = img.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      hide();
-      return;
-    }
-
-    const xRatio = (clientX - rect.left) / rect.width;
-    const yRatio = (clientY - rect.top) / rect.height;
     const zoomLevel = config?.getZoomLevel?.() || 3;
 
     updatePaneSize(pair);
+    const trackingRect = getTrackingRect(pair);
+    let resolvedX = clientX;
+    let resolvedY = clientY;
+    if (!Number.isFinite(resolvedX) || !Number.isFinite(resolvedY)) {
+      if (trackingRect) {
+        resolvedX = trackingRect.left + trackingRect.width / 2;
+        resolvedY = trackingRect.top + trackingRect.height / 2;
+      } else {
+        const fallback = getFallbackPoint(activeImg);
+        resolvedX = fallback.clientX;
+        resolvedY = fallback.clientY;
+      }
+    }
+    const xRatio = trackingRect
+      ? (resolvedX - trackingRect.left) / trackingRect.width
+      : 0.5;
+    const yRatio = trackingRect
+      ? (resolvedY - trackingRect.top) / trackingRect.height
+      : 0.5;
 
     config?.getActiveSides?.().forEach((side) => {
       const data = pair[side];
@@ -588,17 +665,36 @@ export function createZoomManager() {
     if (!preview) return;
     preview.classList.remove("visible");
     hideAllOutlines(config?.getRegistry?.());
+    clearLockedImage();
   }
 
   function handleZoomMove(event) {
     const target = event.target instanceof Element ? event.target : null;
     const img = target ? target.closest("img") : null;
+    const locked = resolveLockedImage();
+    if (locked && !event.shiftKey) {
+      clearLockedImage();
+    }
+    if (locked && event.shiftKey) {
+      lastHover = {
+        img: locked,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        shiftKey: event.shiftKey,
+      };
+      lastCapture = { ...lastHover };
+      showZoomForImage(locked, event.clientX, event.clientY, event.shiftKey);
+      return;
+    }
     if (!img || !container || !container.contains(img)) {
       lastHover = null;
       hide();
       return;
     }
 
+    if (event.shiftKey && !locked) {
+      setLockedImage(img);
+    }
     lastHover = {
       img,
       clientX: event.clientX,
@@ -610,18 +706,31 @@ export function createZoomManager() {
   }
 
   function handleZoomLeave() {
+    if (resolveLockedImage()) return;
     lastHover = null;
     hide();
   }
 
   function handleZoomKeyChange(event) {
-    if (!lastHover) return;
-    showZoomForImage(
-      lastHover.img,
-      lastHover.clientX,
-      lastHover.clientY,
-      event.shiftKey
-    );
+    if (!config?.shouldZoom?.(event.shiftKey)) {
+      clearLockedImage();
+      hide();
+      return;
+    }
+    const locked = resolveLockedImage();
+    const activeImg = locked || lastHover?.img;
+    if (!activeImg) return;
+    if (!locked && event.shiftKey) {
+      setLockedImage(activeImg);
+    }
+    let clientX = lastHover?.clientX;
+    let clientY = lastHover?.clientY;
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+      const fallback = getFallbackPoint(activeImg);
+      clientX = fallback.clientX;
+      clientY = fallback.clientY;
+    }
+    showZoomForImage(activeImg, clientX, clientY, event.shiftKey);
   }
 
   function attach(nextContainer) {

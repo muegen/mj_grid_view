@@ -30,7 +30,6 @@ export function init({ root }) {
   const gridDensityControl = root.querySelector("#scaleGridDensityControl");
   const gridDensityInput = root.querySelector("#scaleGridDensity");
   const zoomLevelSelect = root.querySelector("#scaleZoomLevel");
-  const zoomSizeSelect = root.querySelector("#scaleZoomSize");
   const clearBtn = root.querySelector("#scaleClearBtn");
   const captureZoomBtn = root.querySelector("#scaleCaptureZoomBtn");
   const shareBtn = root.querySelector("#scaleShareBtn");
@@ -134,10 +133,6 @@ export function init({ root }) {
     return Number.isFinite(value) ? value : 3;
   }
 
-  function getZoomSize() {
-    const value = Number.parseFloat(zoomSizeSelect?.value);
-    return Number.isFinite(value) ? value : 200;
-  }
 
   function shouldZoom(shiftKey) {
     if (zoomRequiresShift && !shiftKey) return false;
@@ -589,15 +584,6 @@ export function init({ root }) {
     zoomManager.refresh();
   }
 
-  function toggleZoomSize() {
-    if (!zoomSizeSelect.options.length) return;
-    const nextIndex =
-      (zoomSizeSelect.selectedIndex + 1) % zoomSizeSelect.options.length;
-    zoomSizeSelect.selectedIndex = nextIndex;
-    scheduleSave();
-    zoomManager.updatePaneSize();
-    zoomManager.refresh();
-  }
 
   function toggleZoomRequiresShift() {
     zoomRequiresShift = !zoomRequiresShift;
@@ -1028,10 +1014,6 @@ export function init({ root }) {
       event.preventDefault();
       toggleZoomLevel();
     }
-    if (event.key === "s" || event.key === "S") {
-      event.preventDefault();
-      toggleZoomSize();
-    }
     if (event.key === "h" || event.key === "H") {
       event.preventDefault();
       toggleZoomRequiresShift();
@@ -1071,7 +1053,6 @@ export function init({ root }) {
       rowLimit: rowLimitInput.value,
       gridDensity: gridDensityInput.value,
       zoomLevel: zoomLevelSelect.value,
-      zoomSize: zoomSizeSelect.value,
       zoomRequiresShift,
       filters: filterSelections,
     };
@@ -1094,9 +1075,6 @@ export function init({ root }) {
     }
     if (state.zoomLevel && zoomLevelSelect) {
       zoomLevelSelect.value = state.zoomLevel;
-    }
-    if (state.zoomSize && zoomSizeSelect) {
-      zoomSizeSelect.value = state.zoomSize;
     }
     if (typeof state.zoomRequiresShift === "boolean") {
       zoomRequiresShift = state.zoomRequiresShift;
@@ -1122,7 +1100,7 @@ export function init({ root }) {
 
   function parseStateFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const keys = ["x", "y", "vm", "ii", "rl", "gd", "zl", "zs", "zk", "f", "d"];
+    const keys = ["x", "y", "vm", "ii", "rl", "gd", "zl", "zk", "f", "d"];
     const hasAny = keys.some((key) => params.has(key));
     if (!hasAny) return null;
     let filters = {};
@@ -1140,7 +1118,6 @@ export function init({ root }) {
       rowLimit: params.get("rl") ?? String(DEFAULT_ROW_LIMIT),
       gridDensity: params.get("gd") ?? String(DEFAULT_GRID_DENSITY),
       zoomLevel: params.get("zl") ?? "3",
-      zoomSize: params.get("zs") ?? "300",
       zoomRequiresShift: params.get("zk") !== null ? params.get("zk") !== "0" : true,
       filters,
     };
@@ -1182,7 +1159,6 @@ export function init({ root }) {
     params.set("rl", state.rowLimit);
     params.set("gd", state.gridDensity);
     params.set("zl", state.zoomLevel);
-    params.set("zs", state.zoomSize);
     params.set("zk", state.zoomRequiresShift ? "1" : "0");
     const filters = Object.entries(state.filters || {}).reduce((acc, [key, value]) => {
       if (value && value !== "__all__") acc[key] = value;
@@ -1245,7 +1221,6 @@ export function init({ root }) {
     getActiveSides: () => ["A"],
     getSideLabel: () => "Zoom",
     getZoomLevel,
-    getZoomSize,
     shouldZoom,
     getRegistry: () => pairRegistry,
     getDisplayOrder: () => ["A"],
@@ -1324,15 +1299,6 @@ export function init({ root }) {
     "change",
     () => {
       scheduleSave();
-      zoomManager.refresh();
-    },
-    { signal }
-  );
-  zoomSizeSelect.addEventListener(
-    "change",
-    () => {
-      scheduleSave();
-      zoomManager.updatePaneSize();
       zoomManager.refresh();
     },
     { signal }

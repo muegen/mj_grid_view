@@ -19,7 +19,6 @@ export function init({ root }) {
   const rankViewModeSelect = root.querySelector("#rankViewMode");
   const rankColumnCountSelect = root.querySelector("#rankColumnCount");
   const rankZoomLevelSelect = root.querySelector("#rankZoomLevel");
-  const rankZoomSizeSelect = root.querySelector("#rankZoomSize");
   const rankLabelAInput = root.querySelector("#rankLabelA");
   const rankLabelBInput = root.querySelector("#rankLabelB");
   const rankLabelCInput = root.querySelector("#rankLabelC");
@@ -138,10 +137,6 @@ export function init({ root }) {
     return Number.isFinite(value) ? value : 3;
   }
 
-  function getZoomSize() {
-    const value = Number.parseFloat(rankZoomSizeSelect.value);
-    return Number.isFinite(value) ? value : 200;
-  }
 
   function shouldZoom(shiftKey) {
     if (zoomRequiresShift && !shiftKey) return false;
@@ -373,7 +368,6 @@ export function init({ root }) {
     params.set("cols", state.columnCount || "2");
     params.set("vm", state.viewMode);
     params.set("zl", state.zoomLevel);
-    params.set("zs", state.zoomSize);
     params.set("zk", state.zoomRequiresShift ? "1" : "0");
 
     return `${getBaseUrl()}?${params.toString()}`;
@@ -736,7 +730,6 @@ export function init({ root }) {
       jobsE: rankJobsEInput ? rankJobsEInput.value : "",
       viewMode: rankViewModeSelect ? rankViewModeSelect.value : "auto",
       zoomLevel: rankZoomLevelSelect ? rankZoomLevelSelect.value : "3",
-      zoomSize: rankZoomSizeSelect ? rankZoomSizeSelect.value : "300",
       zoomRequiresShift,
     };
   }
@@ -781,9 +774,6 @@ export function init({ root }) {
     }
     if (state.zoomLevel && rankZoomLevelSelect) {
       rankZoomLevelSelect.value = state.zoomLevel;
-    }
-    if (state.zoomSize && rankZoomSizeSelect) {
-      rankZoomSizeSelect.value = state.zoomSize;
     }
     if (typeof state.zoomRequiresShift === "boolean") {
       zoomRequiresShift = state.zoomRequiresShift;
@@ -830,7 +820,6 @@ export function init({ root }) {
       "cols",
       "vm",
       "zl",
-      "zs",
       "zk",
     ];
     const hasAny = keys.some((key) => params.has(key));
@@ -850,7 +839,6 @@ export function init({ root }) {
       columnCount: params.get("cols") || (rankColumnCountSelect ? rankColumnCountSelect.value : "2"),
       viewMode: params.get("vm") || (rankViewModeSelect ? rankViewModeSelect.value : "auto"),
       zoomLevel: params.get("zl") || (rankZoomLevelSelect ? rankZoomLevelSelect.value : "3"),
-      zoomSize: params.get("zs") || (rankZoomSizeSelect ? rankZoomSizeSelect.value : "300"),
       zoomRequiresShift: params.get("zk") !== null ? params.get("zk") !== "0" : zoomRequiresShift,
     };
   }
@@ -881,7 +869,6 @@ export function init({ root }) {
     getActiveSides,
     getSideLabel: getOptionLabel,
     getZoomLevel,
-    getZoomSize,
     shouldZoom,
     getRegistry: () => pairRegistry,
     getDisplayOrder: () =>
@@ -921,15 +908,6 @@ export function init({ root }) {
     "change",
     () => {
       scheduleRankSave();
-      zoomManager.refresh();
-    },
-    { signal }
-  );
-  rankZoomSizeSelect.addEventListener(
-    "change",
-    () => {
-      scheduleRankSave();
-      zoomManager.updatePaneSize();
       zoomManager.refresh();
     },
     { signal }
