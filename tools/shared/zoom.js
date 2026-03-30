@@ -125,6 +125,57 @@ export function createZoomManager() {
     };
   }
 
+  function getSourceDimensions(data) {
+    if (!data?.img || data.img.dataset.loadError === "true") {
+      return { sourceWidth: 0, sourceHeight: 0 };
+    }
+    return {
+      sourceWidth: data.img.naturalWidth || data.img.clientWidth || 0,
+      sourceHeight: data.img.naturalHeight || data.img.clientHeight || 0,
+    };
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function getZoomGeometry(data, zoomLevel, viewportWidth, viewportHeight) {
+    const safeViewportWidth = Math.max(1, viewportWidth || 0);
+    const safeViewportHeight = Math.max(1, viewportHeight || 0);
+    const safeZoomLevel =
+      Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
+    const { sourceWidth, sourceHeight } = getSourceDimensions(data);
+
+    if (!sourceWidth || !sourceHeight) {
+      return {
+        sourceWidth,
+        sourceHeight,
+        fitScale: 1,
+        baseWidth: safeViewportWidth,
+        baseHeight: safeViewportHeight,
+        scaledWidth: safeViewportWidth * safeZoomLevel,
+        scaledHeight: safeViewportHeight * safeZoomLevel,
+      };
+    }
+
+    const fitScale = Math.min(
+      safeViewportWidth / sourceWidth,
+      safeViewportHeight / sourceHeight
+    );
+    const baseWidth = sourceWidth * fitScale;
+    const baseHeight = sourceHeight * fitScale;
+
+    return {
+      sourceWidth,
+      sourceHeight,
+      fitScale,
+      baseWidth,
+      baseHeight,
+      scaledWidth: baseWidth * safeZoomLevel,
+      scaledHeight: baseHeight * safeZoomLevel,
+    };
+  }
+
   function getJobIdDisplay(data) {
     const jobId = data?.jobId || "";
     if (!jobId) return "";
@@ -301,24 +352,32 @@ export function createZoomManager() {
     }
 
     const { paneWidth, paneHeight } = getPaneDimensions(data);
-    const rawWidth = paneWidth / zoomLevel;
-    const rawHeight = paneHeight / zoomLevel;
-    const boxWidth = Math.min(rawWidth, width);
-    const boxHeight = Math.min(rawHeight, height);
+    const { sourceWidth, sourceHeight, fitScale } = getZoomGeometry(
+      data,
+      zoomLevel,
+      paneWidth,
+      paneHeight
+    );
+    if (!sourceWidth || !sourceHeight || !fitScale) {
+      setOutlineVisibility(data, false);
+      return;
+    }
 
-    const clampedX = Math.min(Math.max(xRatio, 0), 1);
-    const clampedY = Math.min(Math.max(yRatio, 0), 1);
+    const level = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
+    const sourceWindowWidth = paneWidth / (fitScale * level);
+    const sourceWindowHeight = paneHeight / (fitScale * level);
+    const displayScaleX = width / sourceWidth;
+    const displayScaleY = height / sourceHeight;
+    const boxWidth = Math.min(sourceWindowWidth * displayScaleX, width);
+    const boxHeight = Math.min(sourceWindowHeight * displayScaleY, height);
+
+    const clampedX = clamp(xRatio, 0, 1);
+    const clampedY = clamp(yRatio, 0, 1);
     const centerX = clampedX * width;
     const centerY = clampedY * height;
 
-    const left = Math.min(
-      Math.max(centerX - boxWidth / 2, 0),
-      width - boxWidth
-    );
-    const top = Math.min(
-      Math.max(centerY - boxHeight / 2, 0),
-      height - boxHeight
-    );
+    const left = clamp(centerX - boxWidth / 2, 0, width - boxWidth);
+    const top = clamp(centerY - boxHeight / 2, 0, height - boxHeight);
 
     data.outline.style.width = `${boxWidth}px`;
     data.outline.style.height = `${boxHeight}px`;
@@ -352,28 +411,34 @@ export function createZoomManager() {
       return;
     }
 
-    const rect = data.img.getBoundingClientRect();
     const paneRect = pane.image.getBoundingClientRect();
-    const sourceWidth = rect.width || data.img.naturalWidth || 1;
-    const sourceHeight = rect.height || data.img.naturalHeight || 1;
-
-    if (zoomLevel <= 1) {
-      pane.image.classList.remove("is-empty");
-      pane.image.textContent = "";
-      pane.image.style.backgroundImage = `url("${data.url}")`;
-      pane.image.style.backgroundSize = `${paneWidth}px ${paneHeight}px`;
-      pane.image.style.backgroundPosition = "center";
-      return;
-    }
-
-    const bgWidth = sourceWidth * zoomLevel;
-    const bgHeight = sourceHeight * zoomLevel;
-
-    const clampedX = Math.min(Math.max(xRatio, 0), 1);
-    const clampedY = Math.min(Math.max(yRatio, 0), 1);
-
-    const bgX = -(clampedX * bgWidth - paneRect.width / 2);
-    const bgY = -(clampedY * bgHeight - paneRect.height / 2);
+    const viewportWidth = Math.max(1, paneRect.width || paneWidth);
+    const viewportHeight = Math.max(1, paneRect.height || paneHeight);
+    const level = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
+    const { scaledWidth: bgWidth, scaledHeight: bgHeight } = getZoomGeometry(
+      data,
+      level,
+      viewportWidth,
+      viewportHeight
+    );
+    const clampedX = clamp(xRatio, 0, 1);
+    const clampedY = clamp(yRatio, 0, 1);
+    const bgX =
+      bgWidth <= viewportWidth
+        ? (viewportWidth - bgWidth) / 2
+        : clamp(
+            viewportWidth / 2 - clampedX * bgWidth,
+            viewportWidth - bgWidth,
+            0
+          );
+    const bgY =
+      bgHeight <= viewportHeight
+        ? (viewportHeight - bgHeight) / 2
+        : clamp(
+            viewportHeight / 2 - clampedY * bgHeight,
+            viewportHeight - bgHeight,
+            0
+          );
 
     pane.image.classList.remove("is-empty");
     pane.image.textContent = "";
