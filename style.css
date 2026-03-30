@@ -1141,21 +1141,26 @@ button:focus-visible {
 
 .zoom-pane-label {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  width: var(--zoom-pane-size, 200px);
+  box-sizing: border-box;
+  padding: 0 6px;
 }
 
 .zoom-pane-label-text {
   font-size: 12px;
   color: var(--muted);
+  line-height: 1.2;
 }
 
 .zoom-pane-label-job {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   opacity: 0.85;
   text-align: right;
+  line-height: 1.2;
 }
 
 .zoom-pane-image {
