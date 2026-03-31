@@ -1,22 +1,44 @@
-# Ignore .code-workspace files
+# =========================
+# OS / System
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 *.code-workspace
 
-# Ignore .vscode folders
-.vscode/
+# =========================
+# Agents
+# =========================
+.cursor/
+.agent/
+.claude/
+.codex/
+.worktrees/
 
-# Ignore .idea folders
-.idea/
+# =========================
+# Logs
+# =========================
+*.log
 
-# Ignore .pytest_cache folders
-.pytest_cache/
+# =========================
+# Temp
+# =========================
+tmp/
+temp/
+.cache/
 
-# Ignore .pytest_cache folders
-__pycache__/
-
-# Ignore .env files
-.env
-
-# Ignore notes folder
+# =========================
+# Other
+# =========================
 notes/
 other/
-DESIGN.md
