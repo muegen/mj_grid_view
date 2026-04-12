@@ -967,7 +967,8 @@ export function createZoomManager() {
                 width: spanRect.width,
                 height: spanRect.height,
               },
-              labelStyle
+              labelStyle,
+              { colorFallback: "#000" }
             );
           } else {
             const labelStyle = window.getComputedStyle(label);
@@ -980,7 +981,8 @@ export function createZoomManager() {
                 width: labelRect.width,
                 height: labelRect.height,
               },
-              labelStyle
+              labelStyle,
+              { colorFallback: "#000" }
             );
           }
           if (labelJob) {

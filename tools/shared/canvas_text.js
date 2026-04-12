@@ -71,11 +71,13 @@ function normalizeTextAlign(style) {
  * @param {string} text
  * @param {{ left: number, top: number, width: number, height: number }} box - canvas coordinates
  * @param {CSSStyleDeclaration} style
+ * @param {{ colorFallback?: string }} [options]
  */
-export function fillWrappedText(ctx, text, box, style) {
+export function fillWrappedText(ctx, text, box, style, options = {}) {
   const { left, top, width, height } = box;
+  const colorFallback = options.colorFallback ?? "#111";
   ctx.font = getFontString(style);
-  ctx.fillStyle = style.color || "#000";
+  ctx.fillStyle = style.color || colorFallback;
   ctx.textBaseline = "top";
   const maxWidth = Math.max(1, width);
   const lines = wrapTextToLines(ctx, text, maxWidth);
