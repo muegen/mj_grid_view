@@ -12,6 +12,7 @@ import { copyText } from "../shared/clipboard.js";
 import { createImageFrame } from "../shared/images.js";
 import { createZoomManager } from "../shared/zoom.js";
 import { captureZoomPanel, finalizeCapture } from "../shared/zoom_capture.js";
+import { fillWrappedText } from "../shared/canvas_text.js";
 import { detectDelimiter, parseTable } from "../shared/table.js";
 
 const IMAGE_COUNT = 4;
@@ -622,14 +623,6 @@ export function init({ root }) {
     ctx.stroke();
   }
 
-  function getFontString(style) {
-    const fontStyle = style.fontStyle || "normal";
-    const fontWeight = style.fontWeight || "400";
-    const fontSize = style.fontSize || "12px";
-    const fontFamily = style.fontFamily || "sans-serif";
-    return `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
-  }
-
   function isElementVisible(element) {
     if (!element) return false;
     const style = window.getComputedStyle(element);
@@ -790,7 +783,22 @@ export function init({ root }) {
       return;
     }
 
+    const nextCaptureFrame = () =>
+      new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+
     refreshScalePreview();
+    previewInner.scrollTop = 0;
+    previewInner.scrollLeft = 0;
+    await nextCaptureFrame();
+    await nextCaptureFrame();
+
+    const content = previewInner.firstElementChild;
+    if (!content) {
+      showShareStatus("Scale preview is empty.", true);
+      showPreviewStatus("Scale preview is empty.", true);
+      return;
+    }
+
     const panelRect = previewPanel.getBoundingClientRect();
     if (!panelRect.width || !panelRect.height) {
       showShareStatus("Scale preview is empty.", true);
@@ -801,16 +809,15 @@ export function init({ root }) {
     showPreviewStatus("Capturing scale preview...", false, true);
     console.info("[scale] Capturing scale preview...");
 
-    const content = previewInner.firstElementChild;
     const innerRect = previewInner.getBoundingClientRect();
     const innerStyle = window.getComputedStyle(previewInner);
     const paddingLeft = parsePixelValue(innerStyle.paddingLeft);
     const paddingRight = parsePixelValue(innerStyle.paddingRight);
     const paddingTop = parsePixelValue(innerStyle.paddingTop);
     const paddingBottom = parsePixelValue(innerStyle.paddingBottom);
-    const contentRect = content ? content.getBoundingClientRect() : innerRect;
-    const contentWidth = contentRect.width || innerRect.width;
-    const contentHeight = contentRect.height || innerRect.height;
+    const contentRectVisual = content.getBoundingClientRect();
+    const contentWidth = contentRectVisual.width || innerRect.width;
+    const contentHeight = contentRectVisual.height || innerRect.height;
 
     const innerFullWidth = Math.max(
       innerRect.width,
@@ -829,154 +836,204 @@ export function init({ root }) {
     const contentStartX = innerOffsetX + paddingLeft;
     const contentStartY = innerOffsetY + paddingTop;
 
-    const scale = window.devicePixelRatio || 1;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(fullWidth * scale));
-    canvas.height = Math.max(1, Math.round(fullHeight * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      showShareStatus("Scale preview capture failed.", true);
-      showPreviewStatus("Scale preview capture failed.", true);
-      return;
-    }
-    ctx.scale(scale, scale);
+    const savedTransform = content.style.transform;
+    const savedOrigin = content.style.transformOrigin;
 
-    const panelStyle = window.getComputedStyle(previewPanel);
-    const panelRadius = parsePixelValue(panelStyle.borderRadius);
-    const panelBorderWidth = parsePixelValue(panelStyle.borderWidth);
-    const panelBorderColor = panelStyle.borderColor || "#000";
-    const panelBackground = panelStyle.backgroundColor || "#fff";
-    fillRoundedRect(ctx, 0, 0, fullWidth, fullHeight, panelRadius, panelBackground);
-    strokeRoundedRect(
-      ctx,
-      0,
-      0,
-      fullWidth,
-      fullHeight,
-      panelRadius,
-      panelBorderColor,
-      panelBorderWidth
-    );
+    try {
+      content.style.transform = "none";
+      content.style.transformOrigin = "top left";
+      await nextCaptureFrame();
+      await nextCaptureFrame();
 
-    const innerRadius = parsePixelValue(innerStyle.borderRadius);
-    const innerBackground = innerStyle.backgroundColor || "#f5f7fb";
-    fillRoundedRect(
-      ctx,
-      innerOffsetX,
-      innerOffsetY,
-      innerFullWidth,
-      innerFullHeight,
-      innerRadius,
-      innerBackground
-    );
+      const warnings = new Set();
+      const imageCache = new Map();
+      const loadImage = (src) => {
+        if (imageCache.has(src)) return imageCache.get(src);
+        const promise = new Promise((resolve, reject) => {
+          const image = new Image();
+          image.crossOrigin = "anonymous";
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("Image failed to load"));
+          image.src = src;
+        });
+        imageCache.set(src, promise);
+        return promise;
+      };
 
-    const warnings = new Set();
-    const imageCache = new Map();
-    const images = Array.from(previewPanel.querySelectorAll("img"));
-    const imageEntries = images
-      .map((img) => ({
-        src: img.currentSrc || img.src,
-        rect: img.getBoundingClientRect(),
-        inPreview: previewInner.contains(img),
-      }))
-      .filter((entry) => entry.src && entry.rect.width && entry.rect.height);
+      const images = Array.from(previewPanel.querySelectorAll("img"));
+      await Promise.all(
+        images.map(
+          (img) =>
+            new Promise((resolve) => {
+              if (img.complete) {
+                resolve();
+                return;
+              }
+              img.addEventListener("load", resolve, { once: true });
+              img.addEventListener("error", resolve, { once: true });
+            })
+        )
+      );
+      await Promise.all(
+        images.map((img) =>
+          img.decode ? img.decode().catch(() => {}) : Promise.resolve()
+        )
+      );
+      await nextCaptureFrame();
+      await nextCaptureFrame();
 
-    const loadImage = (src) => {
-      if (imageCache.has(src)) return imageCache.get(src);
-      const promise = new Promise((resolve, reject) => {
-        const image = new Image();
-        image.crossOrigin = "anonymous";
-        image.onload = () => resolve(image);
-        image.onerror = () => reject(new Error("Image failed to load"));
-        image.src = src;
-      });
-      imageCache.set(src, promise);
-      return promise;
-    };
-
-    const resolvedImages = await Promise.all(
-      imageEntries.map(async (entry) => {
-        try {
-          const image = await loadImage(entry.src);
-          return { ...entry, image };
-        } catch (error) {
-          warnings.add("image-load");
-          return { ...entry, image: null };
-        }
-      })
-    );
-
-    resolvedImages.forEach((entry) => {
-      if (!entry.image) return;
-      const x = entry.inPreview
-        ? contentStartX + (entry.rect.left - contentRect.left)
-        : entry.rect.left - panelRect.left;
-      const y = entry.inPreview
-        ? contentStartY + (entry.rect.top - contentRect.top)
-        : entry.rect.top - panelRect.top;
-      ctx.drawImage(entry.image, x, y, entry.rect.width, entry.rect.height);
-    });
-
-    const textSelectors = [
-      ".scale-preview-title",
-      ".scale-axis",
-      ".scale-axis-label",
-      ".scale-cell-label-key",
-      ".scale-cell-label-value",
-      ".image-caption",
-      ".placeholder",
-    ];
-    const textElements = Array.from(
-      previewPanel.querySelectorAll(textSelectors.join(","))
-    ).filter((element) => element.childElementCount === 0);
-
-    textElements.forEach((element) => {
-      if (!isElementVisible(element)) return;
-      const text = (element.textContent || "").trim();
-      if (!text) return;
-      const rect = element.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const style = window.getComputedStyle(element);
-      ctx.font = getFontString(style);
-      ctx.fillStyle = style.color || "#111";
-      ctx.textBaseline = "top";
-      const inPreview = previewInner.contains(element);
-      let x = inPreview
-        ? contentStartX + (rect.left - contentRect.left)
-        : rect.left - panelRect.left;
-      let y = inPreview
-        ? contentStartY + (rect.top - contentRect.top)
-        : rect.top - panelRect.top;
-      const align = style.textAlign || "left";
-      if (align === "center") {
-        x += rect.width / 2;
-      } else if (align === "right" || align === "end") {
-        x += rect.width;
+      const contentRectNatural = content.getBoundingClientRect();
+      if (!contentRectNatural.width || !contentRectNatural.height) {
+        showShareStatus("Scale preview capture failed.", true);
+        showPreviewStatus("Scale preview capture failed.", true);
+        return;
       }
-      ctx.textAlign = align === "center" ? "center" : align === "right" || align === "end" ? "right" : "left";
-      ctx.fillText(text, x, y);
-    });
+      const layoutScaleX = contentRectVisual.width / contentRectNatural.width;
+      const layoutScaleY = contentRectVisual.height / contentRectNatural.height;
 
-    const blob = await new Promise((resolve) =>
-      canvas.toBlob(resolve, "image/png")
-    );
-    if (!blob) {
-      showShareStatus("Capture blocked by browser. Use system snip.", true);
-      showPreviewStatus("Capture blocked by browser. Use system snip.", true);
-      return;
+      function mapRectFromNatural(elRect) {
+        return {
+          left: contentStartX + (elRect.left - contentRectNatural.left) * layoutScaleX,
+          top: contentStartY + (elRect.top - contentRectNatural.top) * layoutScaleY,
+          width: elRect.width * layoutScaleX,
+          height: elRect.height * layoutScaleY,
+        };
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(fullWidth * dpr));
+      canvas.height = Math.max(1, Math.round(fullHeight * dpr));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        showShareStatus("Scale preview capture failed.", true);
+        showPreviewStatus("Scale preview capture failed.", true);
+        return;
+      }
+      ctx.scale(dpr, dpr);
+
+      const panelStyle = window.getComputedStyle(previewPanel);
+      const panelRadius = parsePixelValue(panelStyle.borderRadius);
+      const panelBorderWidth = parsePixelValue(panelStyle.borderWidth);
+      const panelBorderColor = panelStyle.borderColor || "#000";
+      const panelBackground = panelStyle.backgroundColor || "#fff";
+      fillRoundedRect(ctx, 0, 0, fullWidth, fullHeight, panelRadius, panelBackground);
+      strokeRoundedRect(
+        ctx,
+        0,
+        0,
+        fullWidth,
+        fullHeight,
+        panelRadius,
+        panelBorderColor,
+        panelBorderWidth
+      );
+
+      const innerRadius = parsePixelValue(innerStyle.borderRadius);
+      const innerBackground = innerStyle.backgroundColor || "#f5f7fb";
+      fillRoundedRect(
+        ctx,
+        innerOffsetX,
+        innerOffsetY,
+        innerFullWidth,
+        innerFullHeight,
+        innerRadius,
+        innerBackground
+      );
+
+      const imageEntries = images
+        .map((img) => ({
+          img,
+          src: img.currentSrc || img.src,
+          inPreview: previewInner.contains(img),
+        }))
+        .filter((entry) => entry.src);
+
+      const resolvedImages = await Promise.all(
+        imageEntries.map(async (entry) => {
+          try {
+            const image = await loadImage(entry.src);
+            const rect = entry.img.getBoundingClientRect();
+            if (!rect.width || !rect.height) {
+              return { ...entry, image, rect: null };
+            }
+            return { ...entry, image, rect };
+          } catch (error) {
+            warnings.add("image-load");
+            return { ...entry, image: null, rect: null };
+          }
+        })
+      );
+
+      resolvedImages.forEach((entry) => {
+        if (!entry.image || !entry.rect) return;
+        const box = entry.inPreview
+          ? mapRectFromNatural(entry.rect)
+          : {
+              left: entry.rect.left - panelRect.left,
+              top: entry.rect.top - panelRect.top,
+              width: entry.rect.width,
+              height: entry.rect.height,
+            };
+        ctx.drawImage(entry.image, box.left, box.top, box.width, box.height);
+      });
+
+      const textSelectors = [
+        ".scale-preview-title",
+        ".scale-axis",
+        ".scale-axis-label",
+        ".scale-cell-label-key",
+        ".scale-cell-label-value",
+        ".image-caption",
+        ".placeholder",
+      ];
+      const textElements = Array.from(
+        previewPanel.querySelectorAll(textSelectors.join(","))
+      ).filter((element) => element.childElementCount === 0);
+
+      textElements.forEach((element) => {
+        if (!isElementVisible(element)) return;
+        const text = (element.textContent || "").trim();
+        if (!text) return;
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const style = window.getComputedStyle(element);
+        const inPreview = previewInner.contains(element);
+        const box = inPreview
+          ? mapRectFromNatural(rect)
+          : {
+              left: rect.left - panelRect.left,
+              top: rect.top - panelRect.top,
+              width: rect.width,
+              height: rect.height,
+            };
+        fillWrappedText(ctx, text, box, style);
+      });
+
+      const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+      if (!blob) {
+        showShareStatus("Capture blocked by browser. Use system snip.", true);
+        showPreviewStatus("Capture blocked by browser. Use system snip.", true);
+        return;
+      }
+
+      await finalizeCapture({
+        blob,
+        warnings: Array.from(warnings),
+        setStatus: (message, isError) => {
+          showShareStatus(message, isError);
+          showPreviewStatus(message, isError);
+          console.info("[scale] " + message);
+        },
+        filePrefix: "scale-preview",
+        label: "Scale preview",
+      });
+    } finally {
+      content.style.transform = savedTransform;
+      content.style.transformOrigin = savedOrigin;
     }
-
-    await finalizeCapture({
-      blob,
-      warnings: Array.from(warnings),
-      setStatus: (message, isError) => {
-        showShareStatus(message, isError);
-        showPreviewStatus(message, isError);
-        console.info("[scale] " + message);
-      },
-      filePrefix: "scale-preview",
-      label: "Scale preview",
-    });
   }
 
   async function handleCapturePanel() {

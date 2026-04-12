@@ -1,4 +1,5 @@
 import { createElement } from "./dom.js";
+import { fillWrappedText, getFontString } from "./canvas_text.js";
 
 export function createZoomManager() {
   let preview = null;
@@ -451,14 +452,6 @@ export function createZoomManager() {
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.stroke();
-  }
-
-  function getFontString(style) {
-    const fontStyle = style.fontStyle || "normal";
-    const fontWeight = style.fontWeight || "400";
-    const fontSize = style.fontSize || "12px";
-    const fontFamily = style.fontFamily || "sans-serif";
-    return `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
   }
 
   function setConfig(nextConfig) {
@@ -964,39 +957,45 @@ export function createZoomManager() {
           const labelJob = label.querySelector(".zoom-pane-label-job");
           if (labelText) {
             const labelStyle = window.getComputedStyle(labelText);
-            ctx.font = getFontString(labelStyle);
-            ctx.fillStyle = labelStyle.color || "#000";
-            ctx.textBaseline = "top";
-            ctx.textAlign = "left";
-            ctx.fillText(
+            const spanRect = labelText.getBoundingClientRect();
+            fillWrappedText(
+              ctx,
               labelText.textContent || "",
-              labelRect.left - rect.left,
-              labelRect.top - rect.top
+              {
+                left: spanRect.left - rect.left,
+                top: spanRect.top - rect.top,
+                width: spanRect.width,
+                height: spanRect.height,
+              },
+              labelStyle
             );
           } else {
             const labelStyle = window.getComputedStyle(label);
-            ctx.font = getFontString(labelStyle);
-            ctx.fillStyle = labelStyle.color || "#000";
-            ctx.textBaseline = "top";
-            ctx.textAlign = "left";
-            ctx.fillText(
+            fillWrappedText(
+              ctx,
               label.textContent || "",
-              labelRect.left - rect.left,
-              labelRect.top - rect.top
+              {
+                left: labelRect.left - rect.left,
+                top: labelRect.top - rect.top,
+                width: labelRect.width,
+                height: labelRect.height,
+              },
+              labelStyle
             );
           }
           if (labelJob) {
             const jobText = (labelJob.textContent || "").trim();
             if (jobText) {
               const jobStyle = window.getComputedStyle(labelJob);
+              const jobRect = labelJob.getBoundingClientRect();
               ctx.font = getFontString(jobStyle);
               ctx.fillStyle = jobStyle.color || "#000";
               ctx.textBaseline = "top";
               ctx.textAlign = "right";
               ctx.fillText(
                 jobText,
-                labelRect.right - rect.left,
-                labelRect.top - rect.top
+                jobRect.right - rect.left,
+                jobRect.top - rect.top
               );
             }
           }
