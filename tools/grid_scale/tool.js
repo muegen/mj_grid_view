@@ -833,8 +833,8 @@ export function init({ root }) {
     const extraBottom = panelRect.bottom - innerRect.bottom;
     const fullWidth = Math.max(panelRect.width, innerOffsetX + innerFullWidth + extraRight);
     const fullHeight = Math.max(panelRect.height, innerOffsetY + innerFullHeight + extraBottom);
-    const contentStartX = innerOffsetX + paddingLeft;
-    const contentStartY = innerOffsetY + paddingTop;
+    const contentVisualLeft = contentRectVisual.left - panelRect.left;
+    const contentVisualTop = contentRectVisual.top - panelRect.top;
 
     const savedTransform = content.style.transform;
     const savedOrigin = content.style.transformOrigin;
@@ -893,8 +893,12 @@ export function init({ root }) {
 
       function mapRectFromNatural(elRect) {
         return {
-          left: contentStartX + (elRect.left - contentRectNatural.left) * layoutScaleX,
-          top: contentStartY + (elRect.top - contentRectNatural.top) * layoutScaleY,
+          left:
+            contentVisualLeft +
+            (elRect.left - contentRectNatural.left) * layoutScaleX,
+          top:
+            contentVisualTop +
+            (elRect.top - contentRectNatural.top) * layoutScaleY,
           width: elRect.width * layoutScaleX,
           height: elRect.height * layoutScaleY,
         };
