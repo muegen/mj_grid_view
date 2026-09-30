@@ -428,6 +428,32 @@ export function createZoomManager() {
     console.info("[zoom capture] " + stage, payload);
   }
 
+  function getLabelCaptureBoxes(label, labelText, labelJob, previewRect) {
+    const labelRect = label.getBoundingClientRect();
+    const textRect = labelText.getBoundingClientRect();
+    const jobText = (labelJob?.textContent || "").trim();
+    const labelLeft = labelRect.left - previewRect.left;
+    return {
+      labelRect,
+      textBox: {
+        left: labelLeft,
+        top: textRect.top - previewRect.top,
+        width: labelRect.width,
+        height: textRect.height,
+      },
+      jobBox:
+        jobText && labelJob
+          ? {
+              text: jobText,
+              left: labelLeft,
+              top: labelJob.getBoundingClientRect().top - previewRect.top,
+              width: labelRect.width,
+              height: labelJob.getBoundingClientRect().height,
+            }
+          : null,
+    };
+  }
+
   function buildRoundedRectPath(ctx, x, y, width, height, radius) {
     const safeRadius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
     ctx.beginPath();
@@ -912,7 +938,11 @@ export function createZoomManager() {
         return { ok: false, reason: "empty" };
       }
 
-      const scale = window.devicePixelRatio || 1;
+      const minCaptureScale =
+        Number.isFinite(options.minCaptureScale) && options.minCaptureScale > 0
+          ? options.minCaptureScale
+          : 1;
+      const scale = Math.max(window.devicePixelRatio || 1, minCaptureScale);
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(rect.width * scale));
       canvas.height = Math.max(1, Math.round(rect.height * scale));
@@ -976,25 +1006,39 @@ export function createZoomManager() {
       for (const pane of panes) {
         const label = pane.querySelector(".zoom-pane-label");
         if (label) {
-          const labelRect = label.getBoundingClientRect();
           const labelText = label.querySelector(".zoom-pane-label-text");
           const labelJob = label.querySelector(".zoom-pane-label-job");
           if (labelText) {
-            const labelStyle = window.getComputedStyle(labelText);
-            const spanRect = labelText.getBoundingClientRect();
+            const { textBox, jobBox } = getLabelCaptureBoxes(
+              label,
+              labelText,
+              labelJob,
+              rect
+            );
             fillWrappedText(
               ctx,
               labelText.textContent || "",
-              {
-                left: spanRect.left - rect.left,
-                top: spanRect.top - rect.top,
-                width: spanRect.width,
-                height: spanRect.height,
-              },
-              labelStyle,
+              textBox,
+              window.getComputedStyle(labelText),
               { colorFallback: "#000" }
             );
+            if (jobBox) {
+              const jobStyle = window.getComputedStyle(labelJob);
+              fillWrappedText(
+                ctx,
+                jobBox.text,
+                {
+                  left: jobBox.left,
+                  top: jobBox.top,
+                  width: jobBox.width,
+                  height: jobBox.height,
+                },
+                jobStyle,
+                { colorFallback: "#000" }
+              );
+            }
           } else {
+            const labelRect = label.getBoundingClientRect();
             const labelStyle = window.getComputedStyle(label);
             fillWrappedText(
               ctx,
@@ -1008,22 +1052,6 @@ export function createZoomManager() {
               labelStyle,
               { colorFallback: "#000" }
             );
-          }
-          if (labelJob) {
-            const jobText = (labelJob.textContent || "").trim();
-            if (jobText) {
-              const jobStyle = window.getComputedStyle(labelJob);
-              const jobRect = labelJob.getBoundingClientRect();
-              ctx.font = getFontString(jobStyle);
-              ctx.fillStyle = jobStyle.color || "#000";
-              ctx.textBaseline = "top";
-              ctx.textAlign = "right";
-              ctx.fillText(
-                jobText,
-                jobRect.right - rect.left,
-                jobRect.top - rect.top
-              );
-            }
           }
         }
 

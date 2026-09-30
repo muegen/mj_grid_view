@@ -55,6 +55,8 @@ export async function finalizeCapture({
   return true;
 }
 
+const EXPORT_CAPTURE_SCALE = 2;
+
 export async function captureZoomPanel({
   zoomManager,
   setStatus = () => {},
@@ -63,7 +65,9 @@ export async function captureZoomPanel({
 } = {}) {
   try {
     zoomManager?.setCaptureState?.("capturing");
-    const result = await zoomManager?.capture?.();
+    const result = await zoomManager?.capture?.({
+      minCaptureScale: EXPORT_CAPTURE_SCALE,
+    });
     if (!result?.ok) {
       zoomManager?.setCaptureState?.("error");
       if (result?.reason === "no-hover" || result?.reason === "hidden") {
@@ -104,7 +108,8 @@ export async function downloadZoomPreview({
   zoomLevel = 1,
   xRatio = 0.5,
   yRatio = 0.5,
-  paneSize = 720,
+  paneSize = 1080,
+  minCaptureScale = EXPORT_CAPTURE_SCALE,
 } = {}) {
   if (!pair) {
     setStatus(`${label} unavailable.`, true);
@@ -178,6 +183,7 @@ export async function downloadZoomPreview({
       zoomLevel,
       aspectOverride: sharedAspect,
       paneSize,
+      minCaptureScale,
     });
     if (!result?.ok) {
       if (result?.reason === "busy") {
