@@ -73,6 +73,7 @@ export function init({ root }) {
   let favoritesStatusTimer = null;
   let scrollTicking = false;
   let zoomRequiresShift = true;
+  let lastHoverPoint = null;
 
   const controller = new AbortController();
   const { signal } = controller;
@@ -286,7 +287,7 @@ export function init({ root }) {
   }
 
   function toggleFavoriteForHover() {
-    if (!lastHoverImg) return;
+    if (!refreshHoverFromPoint()) return;
     const pairId = lastHoverImg.dataset.pairId;
     const side = lastHoverImg.dataset.side;
     const key = getFavoriteKey(pairId, side);
@@ -885,6 +886,10 @@ export function init({ root }) {
   }
 
   function handleHover(event) {
+    lastHoverPoint = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
     const target = event.target instanceof Element ? event.target : null;
     const img = target ? target.closest("img") : null;
     if (!img || !comparisonsEl.contains(img)) {
@@ -892,6 +897,28 @@ export function init({ root }) {
       return;
     }
     lastHoverImg = img;
+  }
+
+  function refreshHoverFromPoint() {
+    if (!lastHoverPoint) {
+      lastHoverImg = null;
+      return null;
+    }
+    const target = document.elementFromPoint(
+      lastHoverPoint.clientX,
+      lastHoverPoint.clientY
+    );
+    if (!(target instanceof Element)) {
+      lastHoverImg = null;
+      return null;
+    }
+    const img = target.closest("img");
+    if (!img || !comparisonsEl.contains(img)) {
+      lastHoverImg = null;
+      return null;
+    }
+    lastHoverImg = img;
+    return img;
   }
 
   const urlState = parseStateFromUrl();
@@ -962,6 +989,7 @@ export function init({ root }) {
   comparisonsEl.addEventListener("mousemove", handleHover, { signal });
   comparisonsEl.addEventListener("mouseleave", () => {
     lastHoverImg = null;
+    lastHoverPoint = null;
   }, { signal });
 
   if (shortcutsToggle) {

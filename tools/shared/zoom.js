@@ -563,8 +563,10 @@ export function createZoomManager() {
     }
 
     const paneRect = pane.image.getBoundingClientRect();
-    const viewportWidth = Math.max(1, paneRect.width || paneWidth);
-    const viewportHeight = Math.max(1, paneRect.height || paneHeight);
+    // Prefer configured pane dimensions to avoid first-frame transform skew
+    // when the preview transitions from hidden scale(0.98) to visible scale(1).
+    const viewportWidth = Math.max(1, paneWidth || paneRect.width);
+    const viewportHeight = Math.max(1, paneHeight || paneRect.height);
     const level = Number.isFinite(zoomLevel) && zoomLevel > 0 ? zoomLevel : 1;
     const { scaledWidth: bgWidth, scaledHeight: bgHeight } = getZoomGeometry(
       data,
@@ -719,6 +721,28 @@ export function createZoomManager() {
     hide();
   }
 
+  function resolveImageAtPoint(clientX, clientY) {
+    if (!container || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+      return null;
+    }
+    const target = document.elementFromPoint(clientX, clientY);
+    if (!(target instanceof Element)) return null;
+    const img = target.closest("img");
+    if (!img || !container.contains(img)) return null;
+    return img;
+  }
+
+  function refreshHoverImageFromPoint() {
+    if (!lastHover) return null;
+    const imgAtPoint = resolveImageAtPoint(lastHover.clientX, lastHover.clientY);
+    if (!imgAtPoint) {
+      lastHover = null;
+      return null;
+    }
+    lastHover = { ...lastHover, img: imgAtPoint };
+    return imgAtPoint;
+  }
+
   function handleZoomKeyChange(event) {
     if (!config?.shouldZoom?.(event.shiftKey)) {
       clearLockedImage();
@@ -726,7 +750,7 @@ export function createZoomManager() {
       return;
     }
     const locked = resolveLockedImage();
-    const activeImg = locked || lastHover?.img;
+    const activeImg = locked || refreshHoverImageFromPoint();
     if (!activeImg) return;
     if (!locked && event.shiftKey) {
       setLockedImage(activeImg);
